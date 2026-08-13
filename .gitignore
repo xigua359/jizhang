@@ -1,0 +1,8 @@
+.DS_Store
+cloud-config.local.js
+*.local.js
+node_modules/
+.env
+.env.*
+*.bak
+*.docx

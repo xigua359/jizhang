@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f5f7fb" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>西瓜账本｜日常账本</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-label="西瓜图案">
+          <img src="watermelon-logo.png" alt="卡通西瓜" />
+        </div>
+        <div><strong>西瓜账本</strong><span>把每一笔都记清楚</span></div>
+      </div>
+
+      <nav class="main-nav" aria-label="主要功能">
+        <button class="nav-item active" data-action="switch-view" data-view="dashboard"><span class="nav-icon">⌂</span><span>总览</span></button>
+        <button class="nav-item" data-action="switch-view" data-view="records"><span class="nav-icon">▤</span><span>账目</span><b class="nav-badge" id="recordBadge">0</b></button>
+        <button class="nav-item" data-action="switch-view" data-view="budget"><span class="nav-icon">◴</span><span>预算</span></button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="sidebar-tip"><span>✦</span><div><strong>记账小提醒</strong><small>每天花 1 分钟，月底少一点意外。</small></div></div>
+        <button class="settings-link" data-action="switch-view" data-view="settings"><span class="nav-icon">⚙</span><span>设置</span></button>
+        <button class="user-card" data-action="open-cloud-auth" type="button"><div class="avatar">我</div><div><strong>我的账本</strong><small id="cloudStatusSidebar">登录后云端同步</small></div><span class="online-dot"></span></button>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobileMenuBtn" aria-label="打开菜单">☰</button>
+        <div class="crumb"><span>西瓜账本</span><i>/</i><strong id="breadcrumbCurrent">总览</strong></div>
+        <div class="topbar-actions">
+          <button class="icon-button" data-action="export-data" title="导出数据">⇩<span>导出</span></button>
+          <button class="top-avatar" data-action="toast" data-message="这是你的本地账本">我</button>
+        </div>
+      </header>
+
+      <div class="page-wrap">
+        <section class="page active" id="view-dashboard"></section>
+        <section class="page" id="view-records"></section>
+        <section class="page" id="view-budget"></section>
+        <section class="page" id="view-settings"></section>
+      </div>
+    </main>
+  </div>
+
+  <button class="floating-add" data-action="open-add"><span>＋</span>记一笔</button>
+  <div class="toast" id="toast" role="status"></div>
+
+  <div class="modal-layer transaction-layer" id="transactionModal" hidden>
+    <div class="modal transaction-modal" role="dialog" aria-modal="true" aria-labelledby="transactionTitle">
+      <div class="transaction-topbar">
+        <div class="transaction-type-switch" role="tablist" aria-label="账目类型">
+          <button type="button" class="type-option" data-type="income">收入</button>
+          <button type="button" class="type-option active" data-type="expense">支出</button>
+          <button type="button" class="type-option" data-type="transfer">转账</button>
+        </div>
+        <button class="close-button transaction-close" data-action="close-modal" aria-label="关闭">×</button>
+      </div>
+      <form id="transactionForm">
+        <div class="transaction-summary">
+          <div class="selected-category" id="selectedCategoryPreview"><span class="selected-category-icon">🍜</span><strong>餐饮</strong></div>
+          <label class="amount-field"><span>¥</span><input name="amount" inputmode="decimal" required placeholder="0.00" autocomplete="off" /></label>
+        </div>
+        <input type="hidden" name="category" id="transactionCategory" value="餐饮" />
+        <div class="category-picker" id="transactionCategoryPicker" aria-label="选择分类"></div>
+        <input type="hidden" name="account" id="transactionAccount" />
+        <div class="transaction-meta-row">
+          <label class="meta-button"><span class="meta-icon">▣</span><input class="field-input" type="date" name="date" required /></label>
+          <button type="button" class="meta-button" data-action="focus-note"><span class="meta-icon">✎</span><span id="noteButtonText">备注</span></button>
+        </div>
+        <label class="transaction-note-field" id="transactionNoteField"><span>备注</span><input class="field-input" name="note" placeholder="写点说明，例如：和朋友吃饭" /></label>
+        <div class="number-pad" aria-label="数字键盘">
+          <button type="button" data-key="7">7</button><button type="button" data-key="8">8</button><button type="button" data-key="9">9</button><button type="button" class="operator" data-key="backspace">⌫</button>
+          <button type="button" data-key="4">4</button><button type="button" data-key="5">5</button><button type="button" data-key="6">6</button><button type="button" class="operator" data-key="+">＋</button>
+          <button type="button" data-key="1">1</button><button type="button" data-key="2">2</button><button type="button" data-key="3">3</button><button type="button" class="operator" data-key="-">−</button>
+          <button type="button" data-key="clear">C</button><button type="button" data-key="0">0</button><button type="button" data-key=".">.</button><button type="submit" class="confirm-key">确定</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-layer" id="categoryModal" hidden>
+    <div class="modal category-modal" role="dialog" aria-modal="true" aria-labelledby="categoryTitle">
+      <div class="modal-header"><div><span class="kicker">自定义你的分类</span><h2 id="categoryTitle">编辑分类</h2></div><button class="close-button" data-action="close-modal" aria-label="关闭">×</button></div>
+      <div class="category-editor-tabs"><button type="button" class="category-editor-tab active" data-category-type="expense">支出分类</button><button type="button" class="category-editor-tab" data-category-type="income">收入分类</button></div>
+      <div class="category-editor-list" id="categoryEditorList"></div>
+      <form id="categoryForm" class="category-add-form"><div class="category-add-icon-wrap"><button type="button" id="categoryAddIcon" class="category-editor-symbol" data-action="toggle-add-icon-picker" aria-label="选择新分类图标">✦</button><input type="hidden" name="icon" value="✦" /><div class="icon-picker" id="categoryAddIconPicker"></div></div><input class="field-input" name="name" required maxlength="12" placeholder="输入新分类名称" /><button type="submit" class="primary-button">添加</button></form>
+      <p class="category-editor-tip">点击分类图标即可更换；“其他”是默认兜底分类，可编辑图标但不能删除。删除分类不会删除已有账目。</p>
+    </div>
+  </div>
+
+  <div class="modal-layer" id="budgetModal" hidden>
+    <div class="modal small-modal" role="dialog" aria-modal="true" aria-labelledby="budgetModalTitle">
+      <div class="modal-header"><div><span class="kicker">设置你的支出边界</span><h2 id="budgetModalTitle">新建预算</h2></div><button class="close-button" data-action="close-modal" aria-label="关闭">×</button></div>
+      <form id="budgetForm">
+        <input type="hidden" name="originalCategory" />
+        <label class="field-label">预算类型<select class="field-input" name="category" required></select></label>
+        <label class="field-label">预算金额<input class="field-input" name="amount" type="number" min="0.01" step="0.01" required placeholder="例如：1200" /></label>
+        <div class="modal-footer"><button type="button" class="text-button" data-action="close-modal">取消</button><button type="submit" class="primary-button">保存预算</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-layer" id="accountModal" hidden>
+    <div class="modal small-modal" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
+      <div class="modal-header"><div><span class="kicker">让余额各就各位</span><h2 id="accountTitle">新增账户</h2></div><button class="close-button" data-action="close-modal" aria-label="关闭">×</button></div>
+      <form id="accountForm">
+        <label class="field-label">账户名称<input class="field-input" name="name" required placeholder="例如：招商银行" /></label>
+        <div class="field-grid"><label class="field-label">类型<select class="field-input" name="type"><option>银行卡</option><option>现金</option><option>信用卡</option><option>电子钱包</option><option>储蓄</option></select></label><label class="field-label">初始余额<input class="field-input" name="balance" type="number" step="0.01" value="0" /></label></div>
+        <div class="modal-footer"><button type="button" class="text-button" data-action="close-modal">取消</button><button type="submit" class="primary-button">创建账户</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="cloudModal" hidden>
+    <div class="modal cloud-modal" role="dialog" aria-modal="true" aria-labelledby="cloudModalTitle">
+      <div class="modal-header"><div><p class="eyebrow">CLOUD SYNC</p><h2 id="cloudModalTitle">登录西瓜账本</h2></div><button class="icon-button" data-action="close-modal" aria-label="关闭">×</button></div>
+      <div class="cloud-login-content" id="cloudLoginFields">
+        <p class="modal-tip">登录后，账目和预算会自动保存到云端，可在手机上继续使用。</p>
+        <label class="field"><span>邮箱</span><input id="cloudEmailInput" type="email" autocomplete="email" placeholder="you@example.com" required /></label>
+        <label class="field"><span>密码</span><input id="cloudPasswordInput" type="password" autocomplete="current-password" minlength="6" placeholder="至少 6 位" required /></label>
+        <div class="cloud-auth-actions"><button type="button" class="primary-button" data-action="cloud-sign-in">登录</button><button type="button" class="secondary-button" data-action="cloud-sign-up">注册账号</button></div>
+      </div>
+      <div class="cloud-signed-in" id="cloudSignedInActions" hidden>
+        <p>当前账号：<strong id="cloudUser"></strong></p>
+        <div class="cloud-auth-actions"><button type="button" class="secondary-button" data-action="cloud-sync-now">立即同步</button><button type="button" class="danger-button" data-action="cloud-sign-out">退出登录</button></div>
+      </div>
+      <div class="cloud-status-line"><span>云端状态</span><strong id="cloudStatus">未配置云端</strong></div>
+    </div>
+  </div>
+
+  <input id="importInput" type="file" accept=".json,.csv,application/json,text/csv" hidden />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="cloud-config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
