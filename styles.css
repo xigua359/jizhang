@@ -191,6 +191,18 @@ button { cursor: pointer; border: 0; }
   .category-add-form .primary-button { padding-left: 12px; padding-right: 12px; }
 }
 
+.budget-category-row { display: flex; align-items: center; gap: 8px; }
+.budget-category-row .field-input { flex: 1; min-width: 0; margin-top: 7px; }
+.budget-edit-categories { flex: 0 0 auto; white-space: nowrap; padding: 10px 12px; font-size: 12px; }
+.budget-icon-picker { display: grid; grid-template-columns: repeat(8, minmax(30px, 1fr)); gap: 5px; max-height: 180px; overflow-y: auto; margin: 7px 0 0; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: #fbfcff; }
+.budget-icon-picker .icon-choice { width: 100%; min-width: 0; height: 32px; }
+.category-editor-footer { justify-content: flex-end; }
+@media (max-width: 520px) {
+  .budget-category-row { align-items: stretch; flex-direction: column; gap: 6px; }
+  .budget-edit-categories { width: 100%; }
+  .budget-icon-picker { grid-template-columns: repeat(7, minmax(30px, 1fr)); }
+}
+
 .budget-card-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 11px; padding-top: 8px; border-top: 1px solid #edf1f7; }
 .budget-card-actions .text-button { padding: 4px 0; color: var(--blue); font-size: 11px; }
 .budget-card-actions .danger-text { color: var(--red); }

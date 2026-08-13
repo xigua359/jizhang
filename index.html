@@ -88,11 +88,11 @@
 
   <div class="modal-layer" id="categoryModal" hidden>
     <div class="modal category-modal" role="dialog" aria-modal="true" aria-labelledby="categoryTitle">
-      <div class="modal-header"><div><span class="kicker">自定义你的分类</span><h2 id="categoryTitle">编辑分类</h2></div><button class="close-button" data-action="close-modal" aria-label="关闭">×</button></div>
+      <div class="modal-header"><div><span class="kicker">自定义你的分类</span><h2 id="categoryTitle">编辑分类</h2></div><button class="close-button" data-action="close-category-editor" aria-label="关闭">×</button></div>
       <div class="category-editor-tabs"><button type="button" class="category-editor-tab active" data-category-type="expense">支出分类</button><button type="button" class="category-editor-tab" data-category-type="income">收入分类</button></div>
       <div class="category-editor-list" id="categoryEditorList"></div>
       <form id="categoryForm" class="category-add-form"><div class="category-add-icon-wrap"><button type="button" id="categoryAddIcon" class="category-editor-symbol" data-action="toggle-add-icon-picker" aria-label="选择新分类图标">✦</button><input type="hidden" name="icon" value="✦" /><div class="icon-picker" id="categoryAddIconPicker"></div></div><input class="field-input" name="name" required maxlength="12" placeholder="输入新分类名称" /><button type="submit" class="primary-button">添加</button></form>
-      <p class="category-editor-tip">点击分类图标即可更换；“其他”是默认兜底分类，可编辑图标但不能删除。删除分类不会删除已有账目。</p>
+      <p class="category-editor-tip">点击分类图标即可更换；“其他”是默认兜底分类，可编辑图标但不能删除。删除分类不会删除已有账目。</p><div class="modal-footer category-editor-footer"><button type="button" class="primary-button" data-action="close-category-editor">完成</button></div>
     </div>
   </div>
 
@@ -101,7 +101,8 @@
       <div class="modal-header"><div><span class="kicker">设置你的支出边界</span><h2 id="budgetModalTitle">新建预算</h2></div><button class="close-button" data-action="close-modal" aria-label="关闭">×</button></div>
       <form id="budgetForm">
         <input type="hidden" name="originalCategory" />
-        <label class="field-label">预算类型<select class="field-input" name="category" required></select></label>
+        <div class="field-label">预算类型<div class="budget-category-row"><select class="field-input" id="budgetCategory" name="category" required></select><button type="button" class="secondary-button budget-edit-categories" data-action="open-budget-category-editor">编辑类型</button></div></div>
+        <div class="field-label">预算图标<div class="icon-picker budget-icon-picker open" id="budgetIconPicker"></div><input type="hidden" name="icon" id="budgetIcon" value="✦" /></div>
         <label class="field-label">预算金额<input class="field-input" name="amount" type="number" min="0.01" step="0.01" required placeholder="例如：1200" /></label>
         <div class="modal-footer"><button type="button" class="text-button" data-action="close-modal">取消</button><button type="submit" class="primary-button">保存预算</button></div>
       </form>
