@@ -137,8 +137,13 @@
   </div>
 
   <input id="importInput" type="file" accept=".json,.csv,application/json,text/csv" hidden />
-  <script src="supabase.js?v=3"></script>
-  <script src="cloud-config.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script>
+    window.LEDGER_CLOUD_CONFIG = {
+      supabaseUrl: 'https://vbrqovpdyvlgqgkwhigh.supabase.co',
+      supabaseAnonKey: 'sb_publishable_uZ1U-8ELUvYJxpE1NSSbQA_XPriVCRx'
+    };
+  </script>
+  <script src="cloud-client.js?v=4"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>
