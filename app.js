@@ -63,7 +63,15 @@ let cloudSyncTimer = null;
 let cloudHydrating = false;
 
 function loadState() { try { const saved = JSON.parse(localStorage.getItem(storageKey)); return saved ? { ...defaultState, ...saved } : structuredClone(defaultState); } catch { return structuredClone(defaultState); } }
-function cloudConfigured() { return Boolean(window.LEDGER_CLOUD_CONFIG?.supabaseUrl && window.LEDGER_CLOUD_CONFIG?.supabaseAnonKey && window.supabase?.createClient); }
+function cloudConfigured() { return Boolean(window.LEDGER_CLOUD_CONFIG?.supabaseUrl && window.LEDGER_CLOUD_CONFIG?.supabaseAnonKey && (window.supabase?.createClient || window.supabaseReady)); }
+async function ensureCloudClient() {
+  if (cloudClient) return cloudClient;
+  if (!window.LEDGER_CLOUD_CONFIG?.supabaseUrl || !window.LEDGER_CLOUD_CONFIG?.supabaseAnonKey) return null;
+  if (!window.supabase?.createClient && window.supabaseReady) await window.supabaseReady;
+  if (!window.supabase?.createClient) return null;
+  cloudClient = window.supabase.createClient(window.LEDGER_CLOUD_CONFIG.supabaseUrl, window.LEDGER_CLOUD_CONFIG.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  return cloudClient;
+}
 function saveState() {
   localStorage.setItem(storageKey, JSON.stringify(state));
   if (cloudSession && !cloudHydrating) queueCloudSync();
@@ -87,7 +95,6 @@ async function hydrateCloud() {
     state = normalizeState(data.state);
     localStorage.setItem(storageKey, JSON.stringify(state));
     renderAll();
-initCloud();
     showToast('已从云端恢复账本');
   } else {
     await syncCloudState();
@@ -117,7 +124,7 @@ function openCloudAuth() {
   document.getElementById('cloudEmailInput')?.focus();
 }
 async function signInCloud() {
-  if (!cloudClient) return openCloudAuth();
+  if (!(await ensureCloudClient())) return showToast('云端服务正在连接，请稍后重试');
   const email = document.getElementById('cloudEmailInput').value.trim();
   const password = document.getElementById('cloudPasswordInput').value;
   if (!email || password.length < 6) return showToast('请输入邮箱和至少 6 位密码');
@@ -127,7 +134,7 @@ async function signInCloud() {
   closeModals(); updateCloudUI('登录成功'); await hydrateCloud();
 }
 async function signUpCloud() {
-  if (!cloudClient) return openCloudAuth();
+  if (!(await ensureCloudClient())) return showToast('云端服务正在连接，请稍后重试');
   const email = document.getElementById('cloudEmailInput').value.trim();
   const password = document.getElementById('cloudPasswordInput').value;
   if (!email || password.length < 6) return showToast('请输入邮箱和至少 6 位密码');
@@ -145,13 +152,15 @@ async function signOutCloud() {
 }
 async function initCloud() {
   updateCloudUI();
-  if (!cloudConfigured()) return;
-  cloudClient = window.supabase.createClient(window.LEDGER_CLOUD_CONFIG.supabaseUrl, window.LEDGER_CLOUD_CONFIG.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
-  const { data } = await cloudClient.auth.getSession();
+  if (!window.LEDGER_CLOUD_CONFIG?.supabaseUrl || !window.LEDGER_CLOUD_CONFIG?.supabaseAnonKey) return;
+  const client = await ensureCloudClient();
+  if (!client) { updateCloudUI('云端连接失败'); return; }
+  const { data, error } = await client.auth.getSession();
+  if (error) { updateCloudUI('云端连接失败'); console.error(error); return; }
   cloudSession = data.session;
   updateCloudUI();
   if (cloudSession) await hydrateCloud();
-  cloudClient.auth.onAuthStateChange((_event, session) => { cloudSession = session; updateCloudUI(); });
+  client.auth.onAuthStateChange((_event, session) => { cloudSession = session; updateCloudUI(); });
 }
 function esc(value) { return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }
 function money(value) { return `¥${Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
