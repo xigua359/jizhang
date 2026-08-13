@@ -63,7 +63,7 @@ let cloudSyncTimer = null;
 let cloudHydrating = false;
 
 function loadState() { try { const saved = JSON.parse(localStorage.getItem(storageKey)); return saved ? { ...defaultState, ...saved } : structuredClone(defaultState); } catch { return structuredClone(defaultState); } }
-function cloudConfigured() { return Boolean(window.LEDGER_CLOUD_CONFIG?.supabaseUrl && window.LEDGER_CLOUD_CONFIG?.supabaseAnonKey && (window.supabase?.createClient || window.supabaseReady)); }
+function cloudConfigured() { return Boolean(window.LEDGER_CLOUD_CONFIG?.supabaseUrl && window.LEDGER_CLOUD_CONFIG?.supabaseAnonKey && window.supabase?.createClient); }
 async function ensureCloudClient() {
   if (cloudClient) return cloudClient;
   if (!window.LEDGER_CLOUD_CONFIG?.supabaseUrl || !window.LEDGER_CLOUD_CONFIG?.supabaseAnonKey) return null;
