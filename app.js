@@ -138,7 +138,7 @@ async function signUpCloud() {
   const email = document.getElementById('cloudEmailInput').value.trim();
   const password = document.getElementById('cloudPasswordInput').value;
   if (!email || password.length < 6) return showToast('请输入邮箱和至少 6 位密码');
-  const { data, error } = await cloudClient.auth.signUp({ email, password });
+  const { data, error } = await cloudClient.auth.signUp({ email, password, options: { emailRedirectTo: `${location.origin}${location.pathname}` } });
   if (error) return showToast(error.message || '注册失败');
   if (!data.session) return showToast('注册成功，请先去邮箱完成验证');
   cloudSession = data.session;
