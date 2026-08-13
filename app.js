@@ -1,4 +1,5 @@
 const storageKey = 'simple-ledger-v1';
+const APP_VERSION = '20260813-mobile-login-fix';
 const categoryMeta = {
   餐饮: { icon: '🍜', className: 'food' }, 交通: { icon: '🚕', className: 'transport' }, 购物: { icon: '🛍️', className: 'shopping' },
   居住: { icon: '🏠', className: 'home' }, 娱乐: { icon: '🎬', className: 'shopping' }, 医疗: { icon: '💊', className: 'home' },
@@ -63,13 +64,15 @@ let cloudSyncTimer = null;
 let cloudHydrating = false;
 
 function loadState() { try { const saved = JSON.parse(localStorage.getItem(storageKey)); return saved ? { ...defaultState, ...saved } : structuredClone(defaultState); } catch { return structuredClone(defaultState); } }
-function cloudConfigured() { return Boolean(window.LEDGER_CLOUD_CONFIG?.supabaseUrl && window.LEDGER_CLOUD_CONFIG?.supabaseAnonKey && window.supabase?.createClient); }
+function cloudConfigured() { return Boolean(window.LEDGER_CLOUD_CONFIG?.supabaseUrl && window.LEDGER_CLOUD_CONFIG?.supabaseAnonKey); }
 async function ensureCloudClient() {
   if (cloudClient) return cloudClient;
   if (!window.LEDGER_CLOUD_CONFIG?.supabaseUrl || !window.LEDGER_CLOUD_CONFIG?.supabaseAnonKey) return null;
   if (!window.supabase?.createClient && window.supabaseReady) await window.supabaseReady;
   if (!window.supabase?.createClient) return null;
-  cloudClient = window.supabase.createClient(window.LEDGER_CLOUD_CONFIG.supabaseUrl, window.LEDGER_CLOUD_CONFIG.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  cloudClient = window.supabase.createClient(window.LEDGER_CLOUD_CONFIG.supabaseUrl, window.LEDGER_CLOUD_CONFIG.supabaseAnonKey, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
   return cloudClient;
 }
 function saveState() {
@@ -129,7 +132,12 @@ async function signInCloud() {
   const password = document.getElementById('cloudPasswordInput').value;
   if (!email || password.length < 6) return showToast('请输入邮箱和至少 6 位密码');
   const { data, error } = await cloudClient.auth.signInWithPassword({ email, password });
-  if (error) return showToast(error.message || '登录失败');
+  if (error) {
+    const message = /invalid login credentials/i.test(error.message || '')
+      ? '邮箱或密码不正确；请确认手机输入法没有自动添加空格，并使用与电脑完全相同的密码'
+      : (error.message || '登录失败');
+    return showToast(message);
+  }
   cloudSession = data.session;
   closeModals(); updateCloudUI('登录成功'); await hydrateCloud();
 }
