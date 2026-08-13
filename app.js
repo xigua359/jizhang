@@ -1,5 +1,5 @@
 const storageKey = 'simple-ledger-v1';
-const APP_VERSION = '20260813-mobile-login-fix';
+const APP_VERSION = '20260813-password-recovery';
 const categoryMeta = {
   餐饮: { icon: '🍜', className: 'food' }, 交通: { icon: '🚕', className: 'transport' }, 购物: { icon: '🛍️', className: 'shopping' },
   居住: { icon: '🏠', className: 'home' }, 娱乐: { icon: '🎬', className: 'shopping' }, 医疗: { icon: '💊', className: 'home' },
@@ -121,10 +121,58 @@ function updateCloudUI(status) {
   if (signedInActions) signedInActions.hidden = !cloudSession;
   if (userCard) userCard.classList.toggle('cloud-connected', Boolean(cloudSession));
 }
+function cloudPanel(panel) {
+  const panels = ['cloudLoginFields', 'cloudForgotFields', 'cloudUpdatePasswordFields', 'cloudSignedInActions'];
+  panels.forEach(id => {
+    const element = document.getElementById(id);
+    if (element) element.hidden = id !== panel;
+  });
+}
+function showCloudLogin() {
+  cloudPanel(cloudSession ? 'cloudSignedInActions' : 'cloudLoginFields');
+  document.getElementById('cloudEmailInput')?.focus();
+}
+function showCloudForgot() {
+  const email = document.getElementById('cloudEmailInput')?.value.trim() || '';
+  const resetEmail = document.getElementById('cloudResetEmailInput');
+  if (resetEmail && email) resetEmail.value = email;
+  cloudPanel('cloudForgotFields');
+  resetEmail?.focus();
+}
+function showCloudPasswordUpdate() {
+  cloudPanel('cloudUpdatePasswordFields');
+  document.getElementById('cloudNewPasswordInput')?.focus();
+}
+function recoveryFlowDetected() {
+  const params = new URLSearchParams(location.search);
+  return params.get('type') === 'recovery' || location.hash.includes('type=recovery');
+}
 function openCloudAuth() {
   if (!cloudConfigured()) { showToast('请先配置 Supabase 云端服务'); return; }
   document.getElementById('cloudModal').hidden = false;
-  document.getElementById('cloudEmailInput')?.focus();
+  showCloudLogin();
+}
+async function sendPasswordReset() {
+  if (!(await ensureCloudClient())) return showToast('云端服务正在连接，请稍后重试');
+  const email = document.getElementById('cloudResetEmailInput').value.trim();
+  if (!email) return showToast('请输入注册邮箱');
+  const redirectTo = `${location.origin}${location.pathname}`;
+  const { error } = await cloudClient.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) return showToast(error.message || '找回邮件发送失败');
+  showToast('如果邮箱已注册，找回密码邮件已发送，请查收');
+}
+async function updateCloudPassword() {
+  if (!(await ensureCloudClient())) return showToast('云端服务正在连接，请稍后重试');
+  const password = document.getElementById('cloudNewPasswordInput').value;
+  const confirmPassword = document.getElementById('cloudConfirmPasswordInput').value;
+  if (password.length < 6) return showToast('新密码至少需要 6 位');
+  if (password !== confirmPassword) return showToast('两次输入的新密码不一致');
+  const { error } = await cloudClient.auth.updateUser({ password });
+  if (error) return showToast(error.message || '密码修改失败');
+  document.getElementById('cloudNewPasswordInput').value = '';
+  document.getElementById('cloudConfirmPasswordInput').value = '';
+  showCloudLogin();
+  showToast('密码已更新，请使用新密码登录');
 }
 async function signInCloud() {
   if (!(await ensureCloudClient())) return showToast('云端服务正在连接，请稍后重试');
@@ -167,8 +215,20 @@ async function initCloud() {
   if (error) { updateCloudUI('云端连接失败'); console.error(error); return; }
   cloudSession = data.session;
   updateCloudUI();
-  if (cloudSession) await hydrateCloud();
-  client.auth.onAuthStateChange((_event, session) => { cloudSession = session; updateCloudUI(); });
+  if (recoveryFlowDetected()) {
+    document.getElementById('cloudModal').hidden = false;
+    if (cloudSession) showCloudPasswordUpdate();
+  } else if (cloudSession) {
+    await hydrateCloud();
+  }
+  client.auth.onAuthStateChange((event, session) => {
+    cloudSession = session;
+    updateCloudUI();
+    if (event === 'PASSWORD_RECOVERY' || recoveryFlowDetected()) {
+      document.getElementById('cloudModal').hidden = false;
+      showCloudPasswordUpdate();
+    }
+  });
 }
 function esc(value) { return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }
 function money(value) { return `¥${Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
@@ -443,6 +503,7 @@ function openAdd() {
 function closeModals() {
   document.querySelectorAll('.modal-layer').forEach(layer => layer.hidden = true);
   document.getElementById('cloudModal')?.setAttribute('hidden', '');
+  cloudPanel('cloudLoginFields');
   reopenBudgetAfterCategoryEditor = false;
   budgetReturnCategory = '';
   budgetReturnAmount = '';
@@ -467,7 +528,7 @@ function closeCategoryEditor(returnToBudget = true) {
 function deleteRecord(id) { const record = state.records.find(r => r.id === id); if (!record) return; if (!confirm(`确定删除“${record.note || record.category}”这笔账吗？`)) return; state.records = state.records.filter(r => r.id !== id); const account = state.accounts.find(a => a.name === record.account); if (account) account.balance += record.type === 'income' ? -Number(record.amount) : Number(record.amount); saveState(); renderAll(); showToast('账目已删除'); }
 function exportData() { const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `西瓜账本备份-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(link.href); showToast('数据已导出'); }
 function importData(file) { const reader = new FileReader(); reader.onload = () => { try { const imported = JSON.parse(reader.result); if (!Array.isArray(imported.records) || !Array.isArray(imported.accounts)) throw new Error(); state = { ...defaultState, ...imported }; saveState(); renderAll(); showToast('数据已恢复'); } catch { showToast('文件格式不正确'); } }; reader.readAsText(file); }
-function handleAction(element) { const action = element.dataset.action; if (action === 'open-cloud-auth') { if (cloudSession) { openCloudAuth(); } else { openCloudAuth(); } return; } if (action === 'cloud-sign-in') { signInCloud(); return; } if (action === 'cloud-sign-up') { signUpCloud(); return; } if (action === 'cloud-sign-out') { signOutCloud(); return; } if (action === 'cloud-sync-now') { syncCloudState(); return; } if (action === 'scroll-to-trend') { document.getElementById('trendPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; } if (action === 'switch-view') { state.activeView = element.dataset.view; saveState(); renderAll(); document.getElementById('sidebar').classList.remove('open'); window.scrollTo({ top: 0, behavior: 'smooth' }); } else if (action === 'open-add') openAdd(); else if (action === 'close-modal') closeModals(); else if (action === 'delete-record') deleteRecord(element.dataset.id); else if (action === 'open-account') { document.getElementById('accountForm').reset(); document.getElementById('accountModal').hidden = false; } else if (action === 'export-data') exportData(); else if (action === 'import-data') document.getElementById('importInput').click(); else if (action === 'clear-data') { if (confirm('确定清空所有数据吗？此操作无法撤销。')) { localStorage.removeItem(storageKey); state = structuredClone(defaultState); renderAll(); showToast('已恢复为示例账本'); } } else if (action === 'toggle-reminder') element.classList.toggle('on'); else if (action === 'focus-note') { document.getElementById('transactionNoteField').classList.add('visible'); document.getElementById('noteButtonText').textContent = '已备注'; document.querySelector('#transactionForm [name="note"]').focus(); } else if (action === 'open-category-editor') openCategoryEditor(); else if (action === 'toggle-record-search') { const box = document.querySelector('.record-toolbar-search'); box?.classList.toggle('expanded'); if (box?.classList.contains('expanded')) document.getElementById('recordSearch')?.focus(); } else if (action === 'open-budget-category-editor') openBudgetCategoryEditor(); else if (action === 'close-category-editor') closeCategoryEditor(); else if (action === 'open-budget-editor') openBudgetEditor(); else if (action === 'edit-budget') openBudgetEditor(element.dataset.category); else if (action === 'delete-budget') deleteBudget(element.dataset.category); else if (action === 'save-category') saveCategory(element.dataset.category); else if (action === 'delete-category') deleteCategory(element.dataset.category); else if (action === 'toggle-icon-picker') {
+function handleAction(element) { const action = element.dataset.action; if (action === 'open-cloud-auth') { if (cloudSession) { openCloudAuth(); } else { openCloudAuth(); } return; } if (action === 'cloud-sign-in') { signInCloud(); return; } if (action === 'cloud-sign-up') { signUpCloud(); return; } if (action === 'cloud-show-forgot') { showCloudForgot(); return; } if (action === 'cloud-show-login') { showCloudLogin(); return; } if (action === 'cloud-send-reset') { sendPasswordReset(); return; } if (action === 'cloud-update-password') { updateCloudPassword(); return; } if (action === 'cloud-sign-out') { signOutCloud(); return; } if (action === 'cloud-sync-now') { syncCloudState(); return; } if (action === 'scroll-to-trend') { document.getElementById('trendPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; } if (action === 'switch-view') { state.activeView = element.dataset.view; saveState(); renderAll(); document.getElementById('sidebar').classList.remove('open'); window.scrollTo({ top: 0, behavior: 'smooth' }); } else if (action === 'open-add') openAdd(); else if (action === 'close-modal') closeModals(); else if (action === 'delete-record') deleteRecord(element.dataset.id); else if (action === 'open-account') { document.getElementById('accountForm').reset(); document.getElementById('accountModal').hidden = false; } else if (action === 'export-data') exportData(); else if (action === 'import-data') document.getElementById('importInput').click(); else if (action === 'clear-data') { if (confirm('确定清空所有数据吗？此操作无法撤销。')) { localStorage.removeItem(storageKey); state = structuredClone(defaultState); renderAll(); showToast('已恢复为示例账本'); } } else if (action === 'toggle-reminder') element.classList.toggle('on'); else if (action === 'focus-note') { document.getElementById('transactionNoteField').classList.add('visible'); document.getElementById('noteButtonText').textContent = '已备注'; document.querySelector('#transactionForm [name="note"]').focus(); } else if (action === 'open-category-editor') openCategoryEditor(); else if (action === 'toggle-record-search') { const box = document.querySelector('.record-toolbar-search'); box?.classList.toggle('expanded'); if (box?.classList.contains('expanded')) document.getElementById('recordSearch')?.focus(); } else if (action === 'open-budget-category-editor') openBudgetCategoryEditor(); else if (action === 'close-category-editor') closeCategoryEditor(); else if (action === 'open-budget-editor') openBudgetEditor(); else if (action === 'edit-budget') openBudgetEditor(element.dataset.category); else if (action === 'delete-budget') deleteBudget(element.dataset.category); else if (action === 'save-category') saveCategory(element.dataset.category); else if (action === 'delete-category') deleteCategory(element.dataset.category); else if (action === 'toggle-icon-picker') {
   const row = element.closest('.category-editor-row');
   document.querySelectorAll('.category-editor-row .icon-picker.open').forEach(picker => { if (picker !== row?.querySelector('.icon-picker')) picker.classList.remove('open'); });
   row?.querySelector('.icon-picker')?.classList.toggle('open');

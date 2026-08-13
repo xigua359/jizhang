@@ -574,6 +574,8 @@ button { cursor: pointer; border: 0; }
 .modal-tip { color: var(--muted); line-height: 1.7; margin: 0 0 16px; }
 .cloud-auth-actions { display: flex; gap: 10px; margin-top: 18px; }
 .cloud-auth-actions > * { flex: 1; }
+.cloud-forgot-link { display: block; margin: 14px auto 0; color: var(--blue); background: transparent; font-size: 12px; }
+.cloud-forgot-link:hover { text-decoration: underline; }
 .cloud-status-line { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 22px; border-top: 1px solid var(--line); color: var(--muted); }
 .cloud-status-line strong { color: var(--blue); }
 @media (max-width: 520px) {
