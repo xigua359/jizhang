@@ -482,3 +482,5 @@ document.getElementById('budgetForm').addEventListener('submit', event => { even
 
 document.getElementById('importInput').addEventListener('change', event => { const file = event.target.files?.[0]; if (file) importData(file); event.target.value = ''; });
 renderAll();
+
+initCloud();
