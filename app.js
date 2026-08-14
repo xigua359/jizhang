@@ -57,6 +57,7 @@ function normalizeState(nextState) {
 }
 let state = normalizeState(loadState());
 let transactionType = 'expense';
+let editingRecordId = null;
 let toastTimer;
 let cloudClient = null;
 let cloudSession = null;
@@ -401,7 +402,7 @@ function renderRecords() {
   const filtered = (query || filter !== '全部') ? matchedRecords : matchedRecords.slice(0, 10);
   document.getElementById('view-records').innerHTML = `${heading('', '账目', '记录、搜索和管理每一笔收入与支出。', '<button class="primary-button" data-action="open-add">＋ 记一笔</button>')}
     <div class="page-card"><div class="toolbar"><div class="record-toolbar-search ${query ? 'expanded' : ''}"><button type="button" class="search-toggle" data-action="toggle-record-search" aria-label="打开搜索">⌕</button><input id="recordSearch" placeholder="搜索备注或分类" value="${esc(query)}" aria-label="搜索账目" /></div><div class="record-toolbar-filters"><select class="filter-select" id="recordFilter"><option value="全部" ${filter === '全部' ? 'selected' : ''}>全部类型</option><option value="expense" ${filter === 'expense' ? 'selected' : ''}>支出</option><option value="income" ${filter === 'income' ? 'selected' : ''}>收入</option>${availableRecordCategories().map(category => `<option value="${esc(category)}" ${filter === category ? 'selected' : ''}>${esc(category)}</option>`).join('')}</select><input class="filter-select" type="month" id="monthFilter" value="${state.selectedMonth}" aria-label="选择月份" /></div></div>
-      <table class="records-table"><thead><tr><th>账目</th><th>日期</th><th>金额</th><th></th></tr></thead><tbody>${filtered.length ? filtered.map(r => `<tr><td><div class="table-category">${icon(r.category)}<div><strong>${esc(r.note || r.category)}</strong><small class="mobile-note">${esc(r.category)}</small></div></div></td><td>${dateText(r.date)}</td><td class="table-amount ${r.type === 'income' ? 'positive' : ''}">${signedAmount(r)}</td><td><button class="delete-record" data-action="delete-record" data-id="${r.id}">×</button></td></tr>`).join('') : '<tr><td colspan="4"><div class="empty-state">没有找到符合条件的账目。</div></td></tr>'}</tbody></table></div>`;
+      <table class="records-table"><thead><tr><th>账目</th><th>日期</th><th>金额</th><th>操作</th></tr></thead><tbody>${filtered.length ? filtered.map(r => `<tr><td><div class="table-category">${icon(r.category)}<div><strong>${esc(r.note || r.category)}</strong><small class="mobile-note">${esc(r.category)}</small></div></div></td><td>${dateText(r.date)}</td><td class="table-amount ${r.type === 'income' ? 'positive' : ''}">${signedAmount(r)}</td><td><div class="record-actions"><button class="edit-record" data-action="edit-record" data-id="${r.id}" title="编辑" aria-label="编辑账目">✎</button><button class="delete-record" data-action="delete-record" data-id="${r.id}" title="删除" aria-label="删除账目">×</button></div></td></tr>`).join('') : '<tr><td colspan="4"><div class="empty-state">没有找到符合条件的账目。</div></td></tr>'}</tbody></table></div>`;
   document.getElementById('recordSearch').addEventListener('input', renderRecords);
   document.getElementById('recordFilter').addEventListener('change', renderRecords);
   document.getElementById('monthFilter').addEventListener('change', event => { state.selectedMonth = event.target.value; saveState(); renderAll(); });
@@ -554,6 +555,7 @@ function fillTransactionForm() {
 }
 function openAdd() {
   transactionType = 'expense';
+  editingRecordId = null;
   const form = document.getElementById('transactionForm');
   form.reset();
   form.elements.date.value = new Date().toISOString().slice(0, 10);
@@ -563,10 +565,30 @@ function openAdd() {
   document.getElementById('transactionModal').hidden = false;
   setTimeout(() => form.elements.amount.focus(), 20);
 }
+function openEditRecord(id) {
+  const record = state.records.find(item => item.id === id);
+  if (!record) return;
+  editingRecordId = id;
+  transactionType = record.type;
+  const form = document.getElementById('transactionForm');
+  form.reset();
+  form.elements.amount.value = record.amount;
+  form.elements.date.value = record.date;
+  form.elements.note.value = record.note || '';
+  form.elements.account.value = record.account || state.accounts[0]?.name || '';
+  document.getElementById('transactionNoteField').classList.toggle('visible', Boolean(record.note));
+  document.getElementById('noteButtonText').textContent = record.note ? '已备注' : '备注';
+  fillTransactionForm();
+  form.elements.account.value = record.account || state.accounts[0]?.name || '';
+  renderTransactionCategories(record.category);
+  document.getElementById('transactionModal').hidden = false;
+  setTimeout(() => form.elements.amount.focus(), 20);
+}
 function closeModals() {
   document.querySelectorAll('.modal-layer').forEach(layer => layer.hidden = true);
   document.getElementById('cloudModal')?.setAttribute('hidden', '');
   cloudPanel('cloudLoginFields');
+  editingRecordId = null;
   reopenBudgetAfterCategoryEditor = false;
   budgetReturnCategory = '';
   budgetReturnAmount = '';
@@ -591,7 +613,7 @@ function closeCategoryEditor(returnToBudget = true) {
 function deleteRecord(id) { const record = state.records.find(r => r.id === id); if (!record) return; if (!confirm(`确定删除“${record.note || record.category}”这笔账吗？`)) return; state.records = state.records.filter(r => r.id !== id); const account = state.accounts.find(a => a.name === record.account); if (account) account.balance += record.type === 'income' ? -Number(record.amount) : Number(record.amount); saveState(); renderAll(); showToast('账目已删除'); }
 function exportData() { const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `西瓜账本备份-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(link.href); showToast('数据已导出'); }
 function importData(file) { const reader = new FileReader(); reader.onload = () => { try { const imported = JSON.parse(reader.result); if (!Array.isArray(imported.records) || !Array.isArray(imported.accounts)) throw new Error(); state = { ...defaultState, ...imported }; saveState(); renderAll(); showToast('数据已恢复'); } catch { showToast('文件格式不正确'); } }; reader.readAsText(file); }
-function handleAction(element) { const action = element.dataset.action; if (action === 'open-cloud-auth') { if (cloudSession) { openCloudAuth(); } else { openCloudAuth(); } return; } if (action === 'cloud-sign-in') { signInCloud(); return; } if (action === 'cloud-sign-up') { signUpCloud(); return; } if (action === 'cloud-show-forgot') { showCloudForgot(); return; } if (action === 'cloud-show-login') { showCloudLogin(); return; } if (action === 'cloud-send-reset') { sendPasswordReset(); return; } if (action === 'cloud-verify-reset') { verifyRecoveryCode(); return; } if (action === 'cloud-update-password') { updateCloudPassword(); return; } if (action === 'cloud-sign-out') { signOutCloud(); return; } if (action === 'cloud-sync-now') { syncCloudState(); return; } if (action === 'scroll-to-trend') { document.getElementById('trendPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; } if (action === 'switch-view') { state.activeView = element.dataset.view; saveState(); renderAll(); document.getElementById('sidebar').classList.remove('open'); window.scrollTo({ top: 0, behavior: 'smooth' }); } else if (action === 'open-add') openAdd(); else if (action === 'close-modal') closeModals(); else if (action === 'delete-record') deleteRecord(element.dataset.id); else if (action === 'open-account') { document.getElementById('accountForm').reset(); document.getElementById('accountModal').hidden = false; } else if (action === 'export-data') exportData(); else if (action === 'import-data') document.getElementById('importInput').click(); else if (action === 'clear-data') { if (confirm('确定清空所有数据吗？此操作无法撤销。')) { localStorage.removeItem(storageKey); state = structuredClone(defaultState); renderAll(); showToast('已恢复为示例账本'); } } else if (action === 'toggle-reminder') element.classList.toggle('on'); else if (action === 'focus-note') { document.getElementById('transactionNoteField').classList.add('visible'); document.getElementById('noteButtonText').textContent = '已备注'; document.querySelector('#transactionForm [name="note"]').focus(); } else if (action === 'open-category-editor') openCategoryEditor(); else if (action === 'toggle-record-search') { const box = document.querySelector('.record-toolbar-search'); box?.classList.toggle('expanded'); if (box?.classList.contains('expanded')) document.getElementById('recordSearch')?.focus(); } else if (action === 'open-budget-category-editor') openBudgetCategoryEditor(); else if (action === 'close-category-editor') closeCategoryEditor(); else if (action === 'open-budget-editor') openBudgetEditor(); else if (action === 'edit-budget') openBudgetEditor(element.dataset.category); else if (action === 'delete-budget') deleteBudget(element.dataset.category); else if (action === 'save-category') saveCategory(element.dataset.category); else if (action === 'delete-category') deleteCategory(element.dataset.category); else if (action === 'toggle-icon-picker') {
+function handleAction(element) { const action = element.dataset.action; if (action === 'open-cloud-auth') { if (cloudSession) { openCloudAuth(); } else { openCloudAuth(); } return; } if (action === 'cloud-sign-in') { signInCloud(); return; } if (action === 'cloud-sign-up') { signUpCloud(); return; } if (action === 'cloud-show-forgot') { showCloudForgot(); return; } if (action === 'cloud-show-login') { showCloudLogin(); return; } if (action === 'cloud-send-reset') { sendPasswordReset(); return; } if (action === 'cloud-verify-reset') { verifyRecoveryCode(); return; } if (action === 'cloud-update-password') { updateCloudPassword(); return; } if (action === 'cloud-sign-out') { signOutCloud(); return; } if (action === 'cloud-sync-now') { syncCloudState(); return; } if (action === 'scroll-to-trend') { document.getElementById('trendPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; } if (action === 'switch-view') { state.activeView = element.dataset.view; saveState(); renderAll(); document.getElementById('sidebar').classList.remove('open'); window.scrollTo({ top: 0, behavior: 'smooth' }); } else if (action === 'open-add') openAdd(); else if (action === 'close-modal') closeModals(); else if (action === 'delete-record') deleteRecord(element.dataset.id); else if (action === 'edit-record') openEditRecord(element.dataset.id); else if (action === 'open-account') { document.getElementById('accountForm').reset(); document.getElementById('accountModal').hidden = false; } else if (action === 'export-data') exportData(); else if (action === 'import-data') document.getElementById('importInput').click(); else if (action === 'clear-data') { if (confirm('确定清空所有数据吗？此操作无法撤销。')) { localStorage.removeItem(storageKey); state = structuredClone(defaultState); renderAll(); showToast('已恢复为示例账本'); } } else if (action === 'toggle-reminder') element.classList.toggle('on'); else if (action === 'focus-note') { document.getElementById('transactionNoteField').classList.add('visible'); document.getElementById('noteButtonText').textContent = '已备注'; document.querySelector('#transactionForm [name="note"]').focus(); } else if (action === 'open-category-editor') openCategoryEditor(); else if (action === 'toggle-record-search') { const box = document.querySelector('.record-toolbar-search'); box?.classList.toggle('expanded'); if (box?.classList.contains('expanded')) document.getElementById('recordSearch')?.focus(); } else if (action === 'open-budget-category-editor') openBudgetCategoryEditor(); else if (action === 'close-category-editor') closeCategoryEditor(); else if (action === 'open-budget-editor') openBudgetEditor(); else if (action === 'edit-budget') openBudgetEditor(element.dataset.category); else if (action === 'delete-budget') deleteBudget(element.dataset.category); else if (action === 'save-category') saveCategory(element.dataset.category); else if (action === 'delete-category') deleteCategory(element.dataset.category); else if (action === 'toggle-icon-picker') {
   const row = element.closest('.category-editor-row');
   document.querySelectorAll('.category-editor-row .icon-picker.open').forEach(picker => { if (picker !== row?.querySelector('.icon-picker')) picker.classList.remove('open'); });
   row?.querySelector('.icon-picker')?.classList.toggle('open');
@@ -657,7 +679,37 @@ document.addEventListener('click', event => {
 
 document.getElementById('mobileMenuBtn').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('open'));
 document.addEventListener('keydown', event => { if (event.key === 'Escape') closeModals(); });
-document.getElementById('transactionForm').addEventListener('submit', event => { event.preventDefault(); const form = event.currentTarget; const amount = Number(form.elements.amount.value); if (!amount || amount <= 0) return showToast('请输入正确的金额'); const category = form.elements.category.value; const accountName = form.elements.account.value; const record = { id: `r-${Date.now()}`, type: transactionType, amount, category, account: accountName, date: form.elements.date.value, note: form.elements.note.value.trim() || category }; state.records.push(record); const account = state.accounts.find(a => a.name === accountName); if (account && transactionType !== 'transfer') account.balance += transactionType === 'income' ? amount : -amount; saveState(); closeModals(); renderAll(); showToast('账目已保存'); });
+document.getElementById('transactionForm').addEventListener('submit', event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const amount = Number(form.elements.amount.value);
+  if (!amount || amount <= 0) return showToast('请输入正确的金额');
+  const category = form.elements.category.value;
+  const accountName = form.elements.account.value || state.accounts[0]?.name || '';
+  const nextRecord = { type: transactionType, amount, category, account: accountName, date: form.elements.date.value, note: form.elements.note.value.trim() || category };
+  if (editingRecordId) {
+    const existing = state.records.find(record => record.id === editingRecordId);
+    if (!existing) return showToast('这笔账已不存在');
+    const oldAccount = state.accounts.find(account => account.name === existing.account);
+    if (oldAccount && existing.type !== 'transfer') oldAccount.balance += existing.type === 'income' ? -Number(existing.amount) : Number(existing.amount);
+    const newAccount = state.accounts.find(account => account.name === accountName);
+    if (newAccount && nextRecord.type !== 'transfer') newAccount.balance += nextRecord.type === 'income' ? amount : -amount;
+    Object.assign(existing, nextRecord);
+    saveState();
+    closeModals();
+    renderAll();
+    showToast('账目已更新');
+    return;
+  }
+  const record = { id: `r-${Date.now()}`, ...nextRecord };
+  state.records.push(record);
+  const account = state.accounts.find(a => a.name === accountName);
+  if (account && transactionType !== 'transfer') account.balance += transactionType === 'income' ? amount : -amount;
+  saveState();
+  closeModals();
+  renderAll();
+  showToast('账目已保存');
+});
 document.getElementById('accountForm').addEventListener('submit', event => { event.preventDefault(); const form = event.currentTarget; const name = form.elements.name.value.trim(); if (!name) return; if (state.accounts.some(a => a.name === name)) return showToast('账户名称已存在'); state.accounts.push({ id: `a-${Date.now()}`, name, type: form.elements.type.value, balance: Number(form.elements.balance.value) || 0 }); saveState(); closeModals(); renderAll(); showToast('账户已创建'); });
 document.getElementById('categoryForm').addEventListener('submit', event => {
   event.preventDefault();
