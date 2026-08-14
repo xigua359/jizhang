@@ -1,5 +1,5 @@
 const storageKey = 'simple-ledger-v1';
-const APP_VERSION = '20260813-password-recovery';
+const APP_VERSION = '20260814-recovery-code';
 const categoryMeta = {
   餐饮: { icon: '🍜', className: 'food' }, 交通: { icon: '🚕', className: 'transport' }, 购物: { icon: '🛍️', className: 'shopping' },
   居住: { icon: '🏠', className: 'home' }, 娱乐: { icon: '🎬', className: 'shopping' }, 医疗: { icon: '💊', className: 'home' },
@@ -62,6 +62,8 @@ let cloudClient = null;
 let cloudSession = null;
 let cloudSyncTimer = null;
 let cloudHydrating = false;
+let recoveryEmail = sessionStorage.getItem('ledger-recovery-email') || '';
+let recoveryCooldownTimer = null;
 
 function loadState() { try { const saved = JSON.parse(localStorage.getItem(storageKey)); return saved ? { ...defaultState, ...saved } : structuredClone(defaultState); } catch { return structuredClone(defaultState); } }
 function cloudConfigured() { return Boolean(window.LEDGER_CLOUD_CONFIG?.supabaseUrl && window.LEDGER_CLOUD_CONFIG?.supabaseAnonKey); }
@@ -133,7 +135,7 @@ function showCloudLogin() {
   document.getElementById('cloudEmailInput')?.focus();
 }
 function showCloudForgot() {
-  const email = document.getElementById('cloudEmailInput')?.value.trim() || '';
+  const email = document.getElementById('cloudEmailInput')?.value.trim() || recoveryEmail;
   const resetEmail = document.getElementById('cloudResetEmailInput');
   if (resetEmail && email) resetEmail.value = email;
   cloudPanel('cloudForgotFields');
@@ -142,6 +144,32 @@ function showCloudForgot() {
 function showCloudPasswordUpdate() {
   cloudPanel('cloudUpdatePasswordFields');
   document.getElementById('cloudNewPasswordInput')?.focus();
+}
+function setRecoveryHint(message, type = '') {
+  const hint = document.getElementById('cloudRecoveryHint');
+  if (!hint) return;
+  hint.textContent = message;
+  hint.classList.toggle('is-error', type === 'error');
+  hint.classList.toggle('is-success', type === 'success');
+}
+function startRecoveryCooldown(seconds = 60) {
+  const button = document.querySelector('[data-action=\"cloud-send-reset\"]');
+  let remaining = seconds;
+  clearInterval(recoveryCooldownTimer);
+  if (button) button.disabled = true;
+  const update = () => {
+    if (!button) return;
+    if (remaining <= 0) {
+      button.disabled = false;
+      button.textContent = '重新发送验证码';
+      clearInterval(recoveryCooldownTimer);
+      return;
+    }
+    button.textContent = `重新发送（${remaining}s）`;
+    remaining -= 1;
+  };
+  update();
+  recoveryCooldownTimer = setInterval(update, 1000);
 }
 function recoveryFlowDetected() {
   const params = new URLSearchParams(location.search);
@@ -154,12 +182,47 @@ function openCloudAuth() {
 }
 async function sendPasswordReset() {
   if (!(await ensureCloudClient())) return showToast('云端服务正在连接，请稍后重试');
-  const email = document.getElementById('cloudResetEmailInput').value.trim();
+  const email = document.getElementById('cloudResetEmailInput')?.value.trim();
   if (!email) return showToast('请输入注册邮箱');
-  const redirectTo = `${location.origin}${location.pathname}`;
-  const { error } = await cloudClient.auth.resetPasswordForEmail(email, { redirectTo });
-  if (error) return showToast(error.message || '找回邮件发送失败');
-  showToast('如果邮箱已注册，找回密码邮件已发送，请查收');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showToast('请输入正确的邮箱地址');
+  const button = document.querySelector('[data-action=\"cloud-send-reset\"]');
+  if (button?.disabled) return;
+  const { error } = await cloudClient.auth.resetPasswordForEmail(email, { redirectTo: `${location.origin}${location.pathname}` });
+  if (error) {
+    const message = /rate limit/i.test(error.message || '')
+      ? '邮件发送次数已达到限制，请稍后再试'
+      : (error.message || '验证码发送失败');
+    setRecoveryHint(message, 'error');
+    return showToast(message);
+  }
+  recoveryEmail = email;
+  sessionStorage.setItem('ledger-recovery-email', email);
+  document.getElementById('cloudResetCodeInput')?.focus();
+  setRecoveryHint('验证码已发送，请查收邮件并输入 6 位数字验证码。', 'success');
+  startRecoveryCooldown(60);
+  showToast('验证码已发送，请查收邮箱');
+}
+async function verifyRecoveryCode() {
+  if (!(await ensureCloudClient())) return showToast('云端服务正在连接，请稍后重试');
+  const email = document.getElementById('cloudResetEmailInput')?.value.trim() || recoveryEmail;
+  const token = document.getElementById('cloudResetCodeInput')?.value.trim().replace(/\s/g, '');
+  if (!email) return showToast('请输入注册邮箱');
+  if (!/^\d{6}$/.test(token || '')) return showToast('请输入邮件中的 6 位验证码');
+  setRecoveryHint('正在验证验证码…');
+  const { data, error } = await cloudClient.auth.verifyOtp({ email, token, type: 'recovery' });
+  if (error) {
+    const message = /expired|invalid|otp/i.test(error.message || '')
+      ? '验证码无效或已过期，请重新发送验证码'
+      : (error.message || '验证码验证失败');
+    setRecoveryHint(message, 'error');
+    return showToast(message);
+  }
+  recoveryEmail = email;
+  sessionStorage.setItem('ledger-recovery-email', email);
+  cloudSession = data.session || cloudSession;
+  updateCloudUI('验证码验证成功');
+  showCloudPasswordUpdate();
+  setRecoveryHint('验证成功，请设置新的登录密码。', 'success');
 }
 async function updateCloudPassword() {
   if (!(await ensureCloudClient())) return showToast('云端服务正在连接，请稍后重试');
@@ -528,7 +591,7 @@ function closeCategoryEditor(returnToBudget = true) {
 function deleteRecord(id) { const record = state.records.find(r => r.id === id); if (!record) return; if (!confirm(`确定删除“${record.note || record.category}”这笔账吗？`)) return; state.records = state.records.filter(r => r.id !== id); const account = state.accounts.find(a => a.name === record.account); if (account) account.balance += record.type === 'income' ? -Number(record.amount) : Number(record.amount); saveState(); renderAll(); showToast('账目已删除'); }
 function exportData() { const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `西瓜账本备份-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(link.href); showToast('数据已导出'); }
 function importData(file) { const reader = new FileReader(); reader.onload = () => { try { const imported = JSON.parse(reader.result); if (!Array.isArray(imported.records) || !Array.isArray(imported.accounts)) throw new Error(); state = { ...defaultState, ...imported }; saveState(); renderAll(); showToast('数据已恢复'); } catch { showToast('文件格式不正确'); } }; reader.readAsText(file); }
-function handleAction(element) { const action = element.dataset.action; if (action === 'open-cloud-auth') { if (cloudSession) { openCloudAuth(); } else { openCloudAuth(); } return; } if (action === 'cloud-sign-in') { signInCloud(); return; } if (action === 'cloud-sign-up') { signUpCloud(); return; } if (action === 'cloud-show-forgot') { showCloudForgot(); return; } if (action === 'cloud-show-login') { showCloudLogin(); return; } if (action === 'cloud-send-reset') { sendPasswordReset(); return; } if (action === 'cloud-update-password') { updateCloudPassword(); return; } if (action === 'cloud-sign-out') { signOutCloud(); return; } if (action === 'cloud-sync-now') { syncCloudState(); return; } if (action === 'scroll-to-trend') { document.getElementById('trendPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; } if (action === 'switch-view') { state.activeView = element.dataset.view; saveState(); renderAll(); document.getElementById('sidebar').classList.remove('open'); window.scrollTo({ top: 0, behavior: 'smooth' }); } else if (action === 'open-add') openAdd(); else if (action === 'close-modal') closeModals(); else if (action === 'delete-record') deleteRecord(element.dataset.id); else if (action === 'open-account') { document.getElementById('accountForm').reset(); document.getElementById('accountModal').hidden = false; } else if (action === 'export-data') exportData(); else if (action === 'import-data') document.getElementById('importInput').click(); else if (action === 'clear-data') { if (confirm('确定清空所有数据吗？此操作无法撤销。')) { localStorage.removeItem(storageKey); state = structuredClone(defaultState); renderAll(); showToast('已恢复为示例账本'); } } else if (action === 'toggle-reminder') element.classList.toggle('on'); else if (action === 'focus-note') { document.getElementById('transactionNoteField').classList.add('visible'); document.getElementById('noteButtonText').textContent = '已备注'; document.querySelector('#transactionForm [name="note"]').focus(); } else if (action === 'open-category-editor') openCategoryEditor(); else if (action === 'toggle-record-search') { const box = document.querySelector('.record-toolbar-search'); box?.classList.toggle('expanded'); if (box?.classList.contains('expanded')) document.getElementById('recordSearch')?.focus(); } else if (action === 'open-budget-category-editor') openBudgetCategoryEditor(); else if (action === 'close-category-editor') closeCategoryEditor(); else if (action === 'open-budget-editor') openBudgetEditor(); else if (action === 'edit-budget') openBudgetEditor(element.dataset.category); else if (action === 'delete-budget') deleteBudget(element.dataset.category); else if (action === 'save-category') saveCategory(element.dataset.category); else if (action === 'delete-category') deleteCategory(element.dataset.category); else if (action === 'toggle-icon-picker') {
+function handleAction(element) { const action = element.dataset.action; if (action === 'open-cloud-auth') { if (cloudSession) { openCloudAuth(); } else { openCloudAuth(); } return; } if (action === 'cloud-sign-in') { signInCloud(); return; } if (action === 'cloud-sign-up') { signUpCloud(); return; } if (action === 'cloud-show-forgot') { showCloudForgot(); return; } if (action === 'cloud-show-login') { showCloudLogin(); return; } if (action === 'cloud-send-reset') { sendPasswordReset(); return; } if (action === 'cloud-verify-reset') { verifyRecoveryCode(); return; } if (action === 'cloud-update-password') { updateCloudPassword(); return; } if (action === 'cloud-sign-out') { signOutCloud(); return; } if (action === 'cloud-sync-now') { syncCloudState(); return; } if (action === 'scroll-to-trend') { document.getElementById('trendPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; } if (action === 'switch-view') { state.activeView = element.dataset.view; saveState(); renderAll(); document.getElementById('sidebar').classList.remove('open'); window.scrollTo({ top: 0, behavior: 'smooth' }); } else if (action === 'open-add') openAdd(); else if (action === 'close-modal') closeModals(); else if (action === 'delete-record') deleteRecord(element.dataset.id); else if (action === 'open-account') { document.getElementById('accountForm').reset(); document.getElementById('accountModal').hidden = false; } else if (action === 'export-data') exportData(); else if (action === 'import-data') document.getElementById('importInput').click(); else if (action === 'clear-data') { if (confirm('确定清空所有数据吗？此操作无法撤销。')) { localStorage.removeItem(storageKey); state = structuredClone(defaultState); renderAll(); showToast('已恢复为示例账本'); } } else if (action === 'toggle-reminder') element.classList.toggle('on'); else if (action === 'focus-note') { document.getElementById('transactionNoteField').classList.add('visible'); document.getElementById('noteButtonText').textContent = '已备注'; document.querySelector('#transactionForm [name="note"]').focus(); } else if (action === 'open-category-editor') openCategoryEditor(); else if (action === 'toggle-record-search') { const box = document.querySelector('.record-toolbar-search'); box?.classList.toggle('expanded'); if (box?.classList.contains('expanded')) document.getElementById('recordSearch')?.focus(); } else if (action === 'open-budget-category-editor') openBudgetCategoryEditor(); else if (action === 'close-category-editor') closeCategoryEditor(); else if (action === 'open-budget-editor') openBudgetEditor(); else if (action === 'edit-budget') openBudgetEditor(element.dataset.category); else if (action === 'delete-budget') deleteBudget(element.dataset.category); else if (action === 'save-category') saveCategory(element.dataset.category); else if (action === 'delete-category') deleteCategory(element.dataset.category); else if (action === 'toggle-icon-picker') {
   const row = element.closest('.category-editor-row');
   document.querySelectorAll('.category-editor-row .icon-picker.open').forEach(picker => { if (picker !== row?.querySelector('.icon-picker')) picker.classList.remove('open'); });
   row?.querySelector('.icon-picker')?.classList.toggle('open');

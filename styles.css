@@ -576,8 +576,17 @@ button { cursor: pointer; border: 0; }
 .cloud-auth-actions > * { flex: 1; }
 .cloud-forgot-link { display: block; margin: 14px auto 0; color: var(--blue); background: transparent; font-size: 12px; }
 .cloud-forgot-link:hover { text-decoration: underline; }
+.cloud-code-row { display: flex; align-items: end; gap: 10px; }
+.cloud-code-row .field { flex: 1; min-width: 0; }
+.cloud-code-verify { flex: 0 0 auto; margin-bottom: 1px; white-space: nowrap; }
+.cloud-recovery-hint { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.cloud-recovery-hint.is-error { color: var(--red); }
+.cloud-recovery-hint.is-success { color: #27855b; }
+.cloud-auth-actions button:disabled { cursor: wait; opacity: .65; }
 .cloud-status-line { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 22px; border-top: 1px solid var(--line); color: var(--muted); }
 .cloud-status-line strong { color: var(--blue); }
 @media (max-width: 520px) {
   .cloud-auth-actions { flex-direction: column; }
+  .cloud-code-row { align-items: stretch; flex-direction: column; gap: 0; }
+  .cloud-code-verify { width: 100%; margin: 0 0 12px; }
 }

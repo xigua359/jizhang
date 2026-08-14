@@ -131,9 +131,11 @@
         <button type="button" class="cloud-forgot-link" data-action="cloud-show-forgot">忘记密码？</button>
       </div>
       <div class="cloud-reset-content" id="cloudForgotFields" hidden>
-        <p class="modal-tip">输入注册邮箱，我们会发送一封找回密码邮件。</p>
+        <p class="modal-tip">输入注册邮箱，获取 6 位验证码。验证码方式可以避免邮箱安全扫描导致找回链接失效。</p>
         <label class="field"><span>邮箱</span><input id="cloudResetEmailInput" type="email" autocomplete="email" placeholder="you@example.com" required /></label>
-        <div class="cloud-auth-actions"><button type="button" class="primary-button" data-action="cloud-send-reset">发送找回邮件</button><button type="button" class="secondary-button" data-action="cloud-show-login">返回登录</button></div>
+        <div class="cloud-code-row"><label class="field"><span>邮箱验证码</span><input id="cloudResetCodeInput" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="6 位数字" /></label><button type="button" class="secondary-button cloud-code-verify" data-action="cloud-verify-reset">验证验证码</button></div>
+        <div class="cloud-auth-actions"><button type="button" class="primary-button" data-action="cloud-send-reset">发送验证码</button><button type="button" class="secondary-button" data-action="cloud-show-login">返回登录</button></div>
+        <p class="cloud-recovery-hint" id="cloudRecoveryHint">验证码会发送到你的注册邮箱。</p>
       </div>
       <div class="cloud-reset-content" id="cloudUpdatePasswordFields" hidden>
         <p class="modal-tip">请设置一个新的登录密码，至少 6 位。</p>
@@ -181,6 +183,6 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
     window.supabaseReady = Promise.resolve(window.supabase);
     window.dispatchEvent(new CustomEvent('supabase-ready'));
   </script>
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>
