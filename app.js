@@ -301,6 +301,10 @@ async function initCloud() {
 function esc(value) { return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }
 function money(value) { return `¥${Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 function monthLabel(month) { const [year, monthNum] = month.split('-'); return `${year}年${Number(monthNum)}月`; }
+function currentMonthKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
 function currentMonthRecords() { return state.records.filter(record => record.date.startsWith(state.selectedMonth)); }
 function expenses(records = currentMonthRecords()) { return records.filter(record => record.type === 'expense').reduce((sum, record) => sum + Number(record.amount), 0); }
 function incomes(records = currentMonthRecords()) { return records.filter(record => record.type === 'income').reduce((sum, record) => sum + Number(record.amount), 0); }
@@ -416,7 +420,12 @@ function renderRecords() {
       <table class="records-table"><thead><tr><th>账目</th><th>日期</th><th>金额</th><th>操作</th></tr></thead><tbody>${filtered.length ? filtered.map(r => `<tr><td><div class="table-category">${icon(r.category)}<div><strong>${esc(r.note || r.category)}</strong><small class="mobile-note">${esc(r.category)}</small></div></div></td><td>${dateText(r.date)}</td><td class="table-amount ${r.type === 'income' ? 'positive' : ''}">${signedAmount(r)}</td><td><div class="record-actions"><button class="edit-record" data-action="edit-record" data-id="${r.id}" title="编辑" aria-label="编辑账目">✎</button><button class="delete-record" data-action="delete-record" data-id="${r.id}" title="删除" aria-label="删除账目">×</button></div></td></tr>`).join('') : '<tr><td colspan="4"><div class="empty-state">没有找到符合条件的账目。</div></td></tr>'}</tbody></table></div>`;
   document.getElementById('recordSearch').addEventListener('input', renderRecords);
   document.getElementById('recordFilter').addEventListener('change', renderRecords);
-  document.getElementById('monthFilter').addEventListener('change', event => { state.selectedMonth = event.target.value; saveState(); renderAll(); });
+  const monthFilter = document.getElementById('monthFilter');
+  if (monthFilter) {
+    // iOS 原生月份选择器的“还原”会恢复 defaultValue，这里固定为当前月份。
+    monthFilter.defaultValue = currentMonthKey();
+  }
+  monthFilter.addEventListener('change', event => { state.selectedMonth = event.target.value; saveState(); renderAll(); });
   if (query) setTimeout(() => document.getElementById('recordSearch')?.focus(), 0);
 }
 function budgetCategories() {
