@@ -679,8 +679,10 @@ function handlePadKey(key) {
   if (key === 'clear') value = '';
   else if (key === 'backspace') value = value.slice(0, -1);
   else if (key === '.') {
-    if (!lastSegment().includes('.')) value = value || '0';
-    if (!value.endsWith('.')) value += '.';
+    if (!lastSegment().includes('.')) {
+      if (!value || /[+-]$/.test(value)) value += '0.';
+      else value += '.';
+    }
   } else if (key === '+' || key === '-') {
     if (!value && key === '-') value = '-';
     else if (value && /[+-]$/.test(value)) value = value.slice(0, -1) + key;
