@@ -41,7 +41,11 @@ function normalizeState(nextState) {
   normalized.chartYear = Number(normalized.chartYear) || Number(normalized.selectedMonth?.slice(0, 4)) || new Date().getFullYear();
   normalized.categoryChartType = normalized.categoryChartType === 'pie' ? 'pie' : 'bar';
   normalized.trendChartType = normalized.trendChartType === 'table' ? 'table' : 'bar';
-  normalized.records = Array.isArray(normalized.records) ? normalized.records : [];
+  normalized.records = Array.isArray(normalized.records) ? normalized.records.map((record, index, records) => ({
+    ...record,
+    id: record.id || `r-${index + 1}`,
+    createdAt: record.createdAt || new Date(`${record.date || `${normalized.selectedMonth || new Date().toISOString().slice(0, 7)}-01`}T12:00:00`).getTime() + (records.length - index)
+  })) : [];
   normalized.accounts = Array.isArray(normalized.accounts) ? normalized.accounts : structuredClone(defaultAccounts);
   normalized.budgets = normalized.budgets && typeof normalized.budgets === 'object' ? normalized.budgets : {};
   normalized.categories = normalized.categories && typeof normalized.categories === 'object' ? normalized.categories : {};
@@ -396,7 +400,14 @@ function renderDashboard() {
   });
 }
 function renderRecords() {
-  const records = [...state.records].filter(r => r.date.startsWith(state.selectedMonth)).sort((a,b) => b.date.localeCompare(a.date));
+  const records = [...state.records]
+    .filter(r => r.date.startsWith(state.selectedMonth))
+    .sort((a, b) => {
+      const dateOrder = String(b.date || '').localeCompare(String(a.date || ''));
+      if (dateOrder) return dateOrder;
+      const createdOrder = new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      return createdOrder || String(b.id || '').localeCompare(String(a.id || ''));
+    });
   const query = document.getElementById('recordSearch')?.value?.trim().toLowerCase() || ''; const filter = document.getElementById('recordFilter')?.value || '全部';
   const matchedRecords = records.filter(r => (!query || `${r.note}${r.category}`.toLowerCase().includes(query)) && (filter === '全部' || r.type === filter || r.category === filter));
   const filtered = (query || filter !== '全部') ? matchedRecords : matchedRecords.slice(0, 10);
@@ -646,16 +657,39 @@ function handleAction(element) { const action = element.dataset.action; if (acti
   form?.querySelectorAll('#budgetIconPicker .icon-choice').forEach(choice => choice.classList.toggle('active', choice.dataset.icon === iconValue));
 } else if (action === 'toast') showToast(element.dataset.message || '已完成'); }
 
+function evaluateAmountExpression(expression) {
+  const source = String(expression || '').replace(/\s+/g, '');
+  if (!source || !/^-?\d+(?:\.\d+)?(?:[+-]\d+(?:\.\d+)?)*$/.test(source)) return NaN;
+  const terms = source.match(/(?:^|[+-])\d+(?:\.\d+)?/g) || [];
+  let total = Number(terms.shift());
+  for (const term of terms) {
+    const operator = term[0];
+    const number = Number(term.slice(1));
+    if (!Number.isFinite(number)) return NaN;
+    total = operator === '+' ? total + number : total - number;
+  }
+  return Number(total.toFixed(2));
+}
+
 function handlePadKey(key) {
   const input = document.querySelector('#transactionForm [name="amount"]');
   if (!input) return;
   let value = input.value || '';
+  const lastSegment = () => value.split(/[+-]/).pop() || '';
   if (key === 'clear') value = '';
   else if (key === 'backspace') value = value.slice(0, -1);
-  else if (key === '.') { if (!value.includes('.')) value = value || '0'; if (!value.endsWith('.')) value += '.'; }
-  else if (key === '+' || key === '-') return;
-  else if (value === '0') value = key;
-  else value += key;
+  else if (key === '.') {
+    if (!lastSegment().includes('.')) value = value || '0';
+    if (!value.endsWith('.')) value += '.';
+  } else if (key === '+' || key === '-') {
+    if (!value && key === '-') value = '-';
+    else if (value && /[+-]$/.test(value)) value = value.slice(0, -1) + key;
+    else if (value && value !== '-') value += key;
+  } else if (/^\d$/.test(key)) {
+    const segment = lastSegment();
+    if (segment === '0') value = value.slice(0, -1) + key;
+    else value += key;
+  }
   input.value = value;
 }
 
@@ -682,8 +716,9 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape') clos
 document.getElementById('transactionForm').addEventListener('submit', event => {
   event.preventDefault();
   const form = event.currentTarget;
-  const amount = Number(form.elements.amount.value);
-  if (!amount || amount <= 0) return showToast('请输入正确的金额');
+  const amount = evaluateAmountExpression(form.elements.amount.value);
+  if (!Number.isFinite(amount) || amount <= 0) return showToast('请输入正确的金额或算式');
+  form.elements.amount.value = amount.toFixed(2);
   const category = form.elements.category.value;
   const accountName = form.elements.account.value || state.accounts[0]?.name || '';
   const nextRecord = { type: transactionType, amount, category, account: accountName, date: form.elements.date.value, note: form.elements.note.value.trim() || category };
@@ -701,7 +736,7 @@ document.getElementById('transactionForm').addEventListener('submit', event => {
     showToast('账目已更新');
     return;
   }
-  const record = { id: `r-${Date.now()}`, ...nextRecord };
+  const record = { id: `r-${Date.now()}`, createdAt: new Date().toISOString(), ...nextRecord };
   state.records.push(record);
   const account = state.accounts.find(a => a.name === accountName);
   if (account && transactionType !== 'transfer') account.balance += transactionType === 'income' ? amount : -amount;

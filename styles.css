@@ -157,7 +157,11 @@ button { cursor: pointer; border: 0; }
   .transaction-meta-row { grid-template-columns: 1fr 1fr; gap: 6px; padding: 9px 0; }
   .meta-button { padding: 0 6px; font-size: 11px; }.meta-button .field-input { font-size: 11px; }
   .number-pad { margin: 0 -15px; }.number-pad button { min-height: clamp(54px, 8.7svh, 70px); font-size: 23px; }
+  /* iOS Safari 会放大字号小于 16px 的输入框，记一笔页面保持原比例 */
+  .transaction-modal input:not([name="amount"]), .transaction-modal textarea, .transaction-modal select { font-size: 16px; }
+  .transaction-modal .meta-button .field-input { font-size: 16px; }
 }
+
 
 /* 分类管理 */
 .edit-category-choice .edit-icon { background: #aeb4bf; font-size: 25px; }
