@@ -116,6 +116,14 @@ button { cursor: pointer; border: 0; }
 
 /* 记一笔：移动端分类面板与数字键盘布局 */
 .transaction-layer { background: linear-gradient(145deg, rgba(255,248,231,.84), rgba(239,246,255,.86) 48%, rgba(244,255,247,.9)); }
+/* 记一笔在手机上采用单击交互，避免连续点击数字或分类时触发浏览器双击缩放 */
+.transaction-modal,
+.transaction-modal button,
+.transaction-modal .meta-button,
+.transaction-modal .category-choice,
+.transaction-modal input,
+.transaction-modal textarea,
+.transaction-modal select { touch-action: manipulation; }
 .transaction-modal { width: min(100%, 560px); padding: 0; overflow: hidden; background: rgba(255,255,255,.92); }
 .transaction-topbar { display: flex; align-items: center; justify-content: center; position: relative; padding: 22px 20px 14px; }
 .transaction-type-switch { display: flex; border: 1.5px solid var(--blue); border-radius: 10px; overflow: hidden; }
