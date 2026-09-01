@@ -35,10 +35,17 @@ const seedRecords = [
   { id: 'r5', type: 'expense', amount: 3200.00, category: '居住', account: '招商银行', date: '2026-08-01', note: '八月房租' },
   { id: 'r6', type: 'expense', amount: 68.00, category: '娱乐', account: '微信钱包', date: '2026-08-01', note: '电影票' }
 ];
-const defaultState = { activeView: 'dashboard', selectedMonth: '2026-08', chartYear: 2026, categoryChartType: 'bar', trendChartType: 'bar', records: seedRecords, accounts: defaultAccounts, budgets: { 餐饮: 1200, 交通: 500, 购物: 1000, 居住: 3500, 娱乐: 500 }, categories: { expense: expenseCategories, income: incomeCategories }, categoryIcons: defaultCategoryIcons };
+const defaultState = { activeView: 'dashboard', selectedMonth: currentMonthKey(), monthSelectionMode: 'auto', chartYear: new Date().getFullYear(), categoryChartType: 'bar', trendChartType: 'bar', records: seedRecords, accounts: defaultAccounts, budgets: { 餐饮: 1200, 交通: 500, 购物: 1000, 居住: 3500, 娱乐: 500 }, categories: { expense: expenseCategories, income: incomeCategories }, categoryIcons: defaultCategoryIcons };
 function normalizeState(nextState) {
-  const normalized = { ...structuredClone(defaultState), ...(nextState || {}) };
-  normalized.chartYear = Number(normalized.chartYear) || Number(normalized.selectedMonth?.slice(0, 4)) || new Date().getFullYear();
+  const savedState = nextState || {};
+  const normalized = { ...structuredClone(defaultState), ...savedState };
+  // 没有主动选择过历史月份时，自动跟随自然月，避免跨月后仍停留在旧月份。
+  normalized.monthSelectionMode = savedState.monthSelectionMode === 'manual' ? 'manual' : 'auto';
+  if (normalized.monthSelectionMode === 'auto') normalized.selectedMonth = currentMonthKey();
+  if (!/^\d{4}-\d{2}$/.test(String(normalized.selectedMonth || ''))) normalized.selectedMonth = currentMonthKey();
+  normalized.chartYear = normalized.monthSelectionMode === 'auto'
+    ? new Date().getFullYear()
+    : Number(normalized.chartYear) || Number(normalized.selectedMonth?.slice(0, 4)) || new Date().getFullYear();
   normalized.categoryChartType = normalized.categoryChartType === 'pie' ? 'pie' : 'bar';
   normalized.trendChartType = normalized.trendChartType === 'table' ? 'table' : 'bar';
   normalized.records = Array.isArray(normalized.records) ? normalized.records.map((record, index, records) => ({
@@ -305,6 +312,10 @@ function currentMonthKey() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
+function currentDateKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
 function currentMonthRecords() { return state.records.filter(record => record.date.startsWith(state.selectedMonth)); }
 function expenses(records = currentMonthRecords()) { return records.filter(record => record.type === 'expense').reduce((sum, record) => sum + Number(record.amount), 0); }
 function incomes(records = currentMonthRecords()) { return records.filter(record => record.type === 'income').reduce((sum, record) => sum + Number(record.amount), 0); }
@@ -425,7 +436,13 @@ function renderRecords() {
     // iOS 原生月份选择器的“还原”会恢复 defaultValue，这里固定为当前月份。
     monthFilter.defaultValue = currentMonthKey();
   }
-  monthFilter.addEventListener('change', event => { state.selectedMonth = event.target.value; saveState(); renderAll(); });
+  monthFilter.addEventListener('change', event => {
+    state.selectedMonth = event.target.value || currentMonthKey();
+    state.monthSelectionMode = state.selectedMonth === currentMonthKey() ? 'auto' : 'manual';
+    if (state.monthSelectionMode === 'auto') state.chartYear = new Date().getFullYear();
+    saveState();
+    renderAll();
+  });
   if (query) setTimeout(() => document.getElementById('recordSearch')?.focus(), 0);
 }
 function budgetCategories() {
@@ -578,7 +595,7 @@ function openAdd() {
   editingRecordId = null;
   const form = document.getElementById('transactionForm');
   form.reset();
-  form.elements.date.value = new Date().toISOString().slice(0, 10);
+  form.elements.date.value = currentDateKey();
   document.getElementById('transactionNoteField').classList.remove('visible');
   document.getElementById('noteButtonText').textContent = '备注';
   fillTransactionForm();
