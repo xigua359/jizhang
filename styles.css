@@ -661,3 +661,44 @@ button { cursor: pointer; border: 0; }
   .page-wrap { padding-bottom: 128px; }
   .floating-add { bottom: calc(86px + env(safe-area-inset-bottom)) !important; }
 }
+
+/* 预算页：按月份查看各预算分类的实际支出 */
+.budget-panel-header {
+  align-items: flex-start;
+}
+.budget-month-control {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.budget-month-control label {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.budget-month-control .filter-select {
+  width: 132px;
+  min-height: 36px;
+  padding: 7px 9px;
+}
+.budget-reset-month {
+  color: var(--blue);
+  white-space: nowrap;
+  font-size: 11px;
+}
+@media (max-width: 720px) {
+  .budget-panel-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .budget-month-control {
+    justify-content: flex-start;
+    padding-top: 3px;
+  }
+  .budget-month-control .filter-select {
+    flex: 1;
+    min-width: 132px;
+  }
+}
