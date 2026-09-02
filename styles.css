@@ -704,7 +704,7 @@ button { cursor: pointer; border: 0; }
 }
 
 
-/* 总览预算进度：同时显示每个分类的已用金额和总预算 */
+/* 总览预算进度：同时显示每个分类的已用金额和预算 */
 .budget-progress-meta {
   display: block;
   margin-top: 4px;
