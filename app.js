@@ -461,10 +461,10 @@ function renderBudget() {
     const numericBudget = Number(budget) || 0;
     const usage = numericBudget ? Math.round(used / numericBudget * 100) : 0;
     const over = used > numericBudget;
-    return `<div class="budget-card">
-      <div class="budget-card-head">${icon(category)}<div><strong>${esc(category)}</strong><small>已用 ${money(used)} / 预算 ${money(numericBudget)}</small></div><span class="budget-percent ${over ? 'negative' : ''}">${usage}%</span></div>
-      <div class="progress ${over ? 'orange' : ''}"><span style="width:${Math.min(100, numericBudget ? used / numericBudget * 100 : 0)}%"></span></div>
-      <div class="budget-card-actions"><button type="button" class="text-button" data-action="edit-budget" data-category="${esc(category)}">修改预算</button><button type="button" class="text-button danger-text" data-action="delete-budget" data-category="${esc(category)}">删除</button></div>
+    return `<div class="budget-card" data-budget-category="${esc(category)}">
+      <div class="budget-card-content"><div class="budget-card-head">${icon(category)}<div><strong>${esc(category)}</strong><small>已用 ${money(used)} / 预算 ${money(numericBudget)}</small></div><span class="budget-percent ${over ? 'negative' : ''}">${usage}%</span></div>
+      <div class="progress ${over ? 'orange' : ''}"><span style="width:${Math.min(100, numericBudget ? used / numericBudget * 100 : 0)}%"></span></div></div>
+      <button type="button" class="budget-swipe-delete" data-action="delete-budget" data-category="${esc(category)}" aria-label="删除${esc(category)}预算">删除</button>
     </div>`;
   }).join('');
   document.getElementById('view-budget').innerHTML = `${heading('MONTHLY PLAN', '预算', '', '<button class="primary-button" data-action="open-budget-editor">＋ 新建预算</button>')}
@@ -738,6 +738,59 @@ function handlePadKey(key) {
   }
   input.value = value;
 }
+
+let budgetTouchState = null;
+let lastBudgetTap = null;
+
+document.addEventListener('touchstart', event => {
+  const card = event.target.closest('.budget-card[data-budget-category]');
+  if (!card || event.target.closest('button')) return;
+  const touch = event.touches[0];
+  if (!touch) return;
+  budgetTouchState = { card, startX: touch.clientX, startY: touch.clientY, moved: false };
+}, { passive: true });
+
+document.addEventListener('touchmove', event => {
+  if (!budgetTouchState) return;
+  const touch = event.touches[0];
+  if (!touch) return;
+  const deltaX = touch.clientX - budgetTouchState.startX;
+  const deltaY = touch.clientY - budgetTouchState.startY;
+  if (Math.abs(deltaX) < 8 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+  budgetTouchState.moved = true;
+  if (deltaX < 0) {
+    document.querySelectorAll('.budget-card.swiped').forEach(card => { if (card !== budgetTouchState.card) card.classList.remove('swiped'); });
+    budgetTouchState.card.classList.add('swiped');
+  } else {
+    budgetTouchState.card.classList.remove('swiped');
+  }
+  event.preventDefault();
+}, { passive: false });
+
+document.addEventListener('touchend', event => {
+  if (!budgetTouchState) return;
+  const { card, moved } = budgetTouchState;
+  budgetTouchState = null;
+  if (moved || event.target.closest('button')) return;
+  if (card.classList.contains('swiped')) {
+    card.classList.remove('swiped');
+    lastBudgetTap = null;
+    return;
+  }
+  const now = Date.now();
+  if (lastBudgetTap && lastBudgetTap.card === card && now - lastBudgetTap.time < 380) {
+    lastBudgetTap = null;
+    openBudgetEditor(card.dataset.budgetCategory);
+  } else {
+    lastBudgetTap = { card, time: now };
+  }
+}, { passive: true });
+
+document.addEventListener('dblclick', event => {
+  const card = event.target.closest('.budget-card[data-budget-category]');
+  if (!card || event.target.closest('button')) return;
+  openBudgetEditor(card.dataset.budgetCategory);
+});
 
 document.addEventListener('click', event => {
   const action = event.target.closest('[data-action]');

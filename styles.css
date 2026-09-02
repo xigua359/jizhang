@@ -219,9 +219,34 @@ button { cursor: pointer; border: 0; }
   .budget-icon-picker { grid-template-columns: repeat(7, minmax(30px, 1fr)); }
 }
 
-.budget-card-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 11px; padding-top: 8px; border-top: 1px solid #edf1f7; }
-.budget-card-actions .text-button { padding: 4px 0; color: var(--blue); font-size: 11px; }
-.budget-card-actions .danger-text { color: var(--red); }
+/* 预算卡片：桌面端双击编辑，手机端左滑显示删除 */
+.budget-card {
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+  background: var(--surface);
+  touch-action: pan-y;
+  user-select: none;
+}
+.budget-card-content {
+  position: relative;
+  z-index: 1;
+  padding: 16px;
+  background: var(--surface);
+  transition: transform .22s ease;
+}
+.budget-card.swiped .budget-card-content { transform: translateX(-76px); }
+.budget-swipe-delete {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 0;
+  width: 76px;
+  color: #fff;
+  background: var(--red);
+  font-size: 12px;
+  font-weight: 700;
+}
+.budget-swipe-delete:active { background: #df686f; }
 
 /* 账目筛选：搜索收起为放大镜，类型与月份并排 */
 .toolbar { align-items: center; }
