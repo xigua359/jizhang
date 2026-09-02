@@ -360,7 +360,7 @@ function renderAll() { activePage(state.activeView); renderDashboard(); renderRe
 function heading(eyebrow, title, desc, actions = '') { return `<div class="page-heading"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1>${desc ? `<p>${desc}</p>` : ''}</div><div class="heading-actions">${actions}</div></div>`; }
 function recordRow(record, compact = false) { return `<div class="record-row">${icon(record.category)}<div class="record-main"><strong>${esc(record.note || record.category)}</strong><small>${esc(record.category)} · ${esc(record.account)} · ${dateText(record.date)}</small></div><span class="record-amount ${record.type}">${signedAmount(record)}</span>${compact ? '' : `<button class="delete-record" data-action="delete-record" data-id="${record.id}" title="删除">×</button>`}</div>`; }
 function categoryStats() { const map = {}; currentMonthRecords().filter(r => r.type === 'expense').forEach(r => { map[r.category] = (map[r.category] || 0) + Number(r.amount); }); return Object.entries(map).sort((a, b) => b[1] - a[1]); }
-function availableRecordCategories() { const savedCategories = Object.values(state.categories || {}).flat(); const usedCategories = state.records.map(record => record.category); return [...new Set([...savedCategories, ...usedCategories].map(category => String(category || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN')); }
+function availableRecordCategories() { const usedCategories = state.records.map(record => record.category); return [...new Set(usedCategories.map(category => String(category || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN')); }
 function renderDashboard() {
   const records = currentMonthRecords();
   const expense = expenses(records);
