@@ -702,3 +702,18 @@ button { cursor: pointer; border: 0; }
     min-width: 132px;
   }
 }
+
+
+/* 总览预算进度：同时显示每个分类的已用金额和总预算 */
+.budget-progress-meta {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+@media (max-width: 720px) {
+  .budget-progress-meta {
+    font-size: 10px;
+  }
+}
