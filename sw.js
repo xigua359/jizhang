@@ -1,4 +1,4 @@
-const CACHE_NAME = 'watermelon-ledger-v12';
+const CACHE_NAME = 'watermelon-ledger-v13';
 const APP_SHELL = [
   './',
   './index.html',
