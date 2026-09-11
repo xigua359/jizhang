@@ -103,21 +103,51 @@ async function syncCloudState() {
   if (error) { updateCloudUI('云端同步失败'); console.error(error); return; }
   updateCloudUI('已同步');
 }
+function mergeCloudState(localState, remoteState) {
+  const local = normalizeState(localState);
+  const remote = normalizeState(remoteState);
+  const recordsById = new Map();
+  [...remote.records, ...local.records].forEach(record => {
+    const previous = recordsById.get(record.id);
+    if (!previous || new Date(record.updatedAt || record.createdAt || 0).getTime() >= new Date(previous.updatedAt || previous.createdAt || 0).getTime()) recordsById.set(record.id, record);
+  });
+  const accountsById = new Map();
+  [...remote.accounts, ...local.accounts].forEach(account => {
+    const key = account.id || account.name;
+    if (!accountsById.has(key)) accountsById.set(key, account);
+  });
+  const merged = normalizeState({
+    ...remote,
+    ...local,
+    records: [...recordsById.values()],
+    accounts: [...accountsById.values()],
+    budgets: { ...(remote.budgets || {}), ...(local.budgets || {}) },
+    categories: {
+      expense: [...new Set([...(remote.categories?.expense || []), ...(local.categories?.expense || [])])],
+      income: [...new Set([...(remote.categories?.income || []), ...(local.categories?.income || [])])]
+    },
+    categoryIcons: { ...(remote.categoryIcons || {}), ...(local.categoryIcons || {}) }
+  });
+  return merged;
+}
 async function hydrateCloud() {
   if (!cloudClient || !cloudSession) return;
   cloudHydrating = true;
+  const localBeforeHydrate = state;
   const { data, error } = await cloudClient.from('ledger_data').select('state').eq('user_id', cloudSession.user.id).maybeSingle();
   if (error) { cloudHydrating = false; updateCloudUI('读取云端失败'); console.error(error); return; }
   if (data?.state && typeof data.state === 'object') {
-    state = normalizeState(data.state);
+    state = mergeCloudState(localBeforeHydrate, data.state);
     localStorage.setItem(storageKey, JSON.stringify(state));
     renderAll();
-    showToast('已从云端恢复账本');
+    cloudHydrating = false;
+    await syncCloudState();
+    showToast('已合并本机与云端账本');
   } else {
+    cloudHydrating = false;
     await syncCloudState();
     showToast('已将本机账本保存到云端');
   }
-  cloudHydrating = false;
   updateCloudUI('已登录');
 }
 function updateCloudUI(status) {
@@ -863,7 +893,7 @@ document.getElementById('transactionForm').addEventListener('submit', event => {
   form.elements.amount.value = amount.toFixed(2);
   const category = form.elements.category.value;
   const accountName = form.elements.account.value || state.accounts[0]?.name || '';
-  const nextRecord = { type: transactionType, amount, category, account: accountName, date: form.elements.date.value, note: form.elements.note.value.trim() || category };
+  const nextRecord = { type: transactionType, amount, category, account: accountName, date: form.elements.date.value, note: form.elements.note.value.trim() || category, updatedAt: new Date().toISOString() };
   if (editingRecordId) {
     const existing = state.records.find(record => record.id === editingRecordId);
     if (!existing) return showToast('这笔账已不存在');
