@@ -360,7 +360,7 @@ function renderAll() { activePage(state.activeView); renderDashboard(); renderRe
 function heading(eyebrow, title, desc, actions = '') { return `<div class="page-heading"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1>${desc ? `<p>${desc}</p>` : ''}</div><div class="heading-actions">${actions}</div></div>`; }
 function recordRow(record, compact = false) { return `<div class="record-row">${icon(record.category)}<div class="record-main"><strong>${esc(record.note || record.category)}</strong><small>${esc(record.category)} · ${esc(record.account)} · ${dateText(record.date)}</small></div><span class="record-amount ${record.type}">${signedAmount(record)}</span>${compact ? '' : `<button class="delete-record" data-action="delete-record" data-id="${record.id}" title="删除">×</button>`}</div>`; }
 function categoryStats() { const map = {}; currentMonthRecords().filter(r => r.type === 'expense').forEach(r => { map[r.category] = (map[r.category] || 0) + Number(r.amount); }); return Object.entries(map).sort((a, b) => b[1] - a[1]); }
-function availableRecordCategories() { const usedCategories = state.records.map(record => record.category); return [...new Set(usedCategories.map(category => String(category || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN')); }
+function availableRecordCategories(extraCategory = '') { const usedCategories = state.records.map(record => record.category); if (extraCategory) usedCategories.push(extraCategory); return [...new Set(usedCategories.map(category => String(category || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN')); }
 function renderDashboard() {
   const records = currentMonthRecords();
   const expense = expenses(records);
@@ -423,14 +423,16 @@ function renderRecords() {
       const createdOrder = new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
       return createdOrder || String(b.id || '').localeCompare(String(a.id || ''));
     });
-  const query = document.getElementById('recordSearch')?.value?.trim().toLowerCase() || ''; const filter = document.getElementById('recordFilter')?.value || '全部';
-  const matchedRecords = records.filter(r => (!query || `${r.note}${r.category}`.toLowerCase().includes(query)) && (filter === '全部' || r.type === filter || r.category === filter));
+  const drilldown = state.recordDrilldown && state.recordDrilldown.month === state.selectedMonth ? state.recordDrilldown : null;
+  const query = drilldown ? '' : (document.getElementById('recordSearch')?.value?.trim().toLowerCase() || '');
+  const filter = drilldown ? drilldown.category : (document.getElementById('recordFilter')?.value || '全部');
+  const matchedRecords = records.filter(r => (!query || `${r.note}${r.category}`.toLowerCase().includes(query)) && (drilldown ? r.type === 'expense' && r.category === drilldown.category : (filter === '全部' || r.type === filter || r.category === filter)));
   const filtered = matchedRecords;
   document.getElementById('view-records').innerHTML = `${heading('', '账目', '记录、搜索和管理每一笔收入与支出。', '<button class="primary-button" data-action="open-add">＋ 记一笔</button>')}
-    <div class="page-card"><div class="toolbar"><div class="record-toolbar-search ${query ? 'expanded' : ''}"><button type="button" class="search-toggle" data-action="toggle-record-search" aria-label="打开搜索">⌕</button><input id="recordSearch" placeholder="搜索备注或分类" value="${esc(query)}" aria-label="搜索账目" /></div><div class="record-toolbar-filters"><select class="filter-select" id="recordFilter"><option value="全部" ${filter === '全部' ? 'selected' : ''}>全部类型</option><option value="expense" ${filter === 'expense' ? 'selected' : ''}>支出</option><option value="income" ${filter === 'income' ? 'selected' : ''}>收入</option>${availableRecordCategories().map(category => `<option value="${esc(category)}" ${filter === category ? 'selected' : ''}>${esc(category)}</option>`).join('')}</select><input class="filter-select" type="month" id="monthFilter" value="${state.selectedMonth}" aria-label="选择月份" /></div></div>
+    <div class="page-card"><div class="toolbar"><div class="record-toolbar-search ${query ? 'expanded' : ''}"><button type="button" class="search-toggle" data-action="toggle-record-search" aria-label="打开搜索">⌕</button><input id="recordSearch" placeholder="搜索备注或分类" value="${esc(query)}" aria-label="搜索账目" /></div><div class="record-toolbar-filters"><select class="filter-select" id="recordFilter"><option value="全部" ${filter === '全部' ? 'selected' : ''}>全部类型</option><option value="expense" ${filter === 'expense' ? 'selected' : ''}>支出</option><option value="income" ${filter === 'income' ? 'selected' : ''}>收入</option>${availableRecordCategories(drilldown?.category).map(category => `<option value="${esc(category)}" ${filter === category ? 'selected' : ''}>${esc(category)}</option>`).join('')}</select><input class="filter-select" type="month" id="monthFilter" value="${state.selectedMonth}" aria-label="选择月份" /></div></div>${drilldown ? `<div class="record-drilldown-note">${icon(drilldown.category)} ${esc(monthLabel(state.selectedMonth))} · 仅显示${esc(drilldown.category)}支出 <button type="button" class="text-button" data-action="clear-record-drilldown">清除筛选</button></div>` : ""}
       <table class="records-table"><thead><tr><th>账目</th><th>日期</th><th>金额</th><th>操作</th></tr></thead><tbody>${filtered.length ? filtered.map(r => `<tr><td><div class="table-category">${icon(r.category)}<div><strong>${esc(r.note || r.category)}</strong><small class="mobile-note">${esc(r.category)}</small></div></div></td><td>${dateText(r.date)}</td><td class="table-amount ${r.type === 'income' ? 'positive' : ''}">${signedAmount(r)}</td><td><div class="record-actions"><button class="edit-record" data-action="edit-record" data-id="${r.id}" title="编辑" aria-label="编辑账目">✎</button><button class="delete-record" data-action="delete-record" data-id="${r.id}" title="删除" aria-label="删除账目">×</button></div></td></tr>`).join('') : '<tr><td colspan="4"><div class="empty-state">没有找到符合条件的账目。</div></td></tr>'}</tbody></table></div>`;
   document.getElementById('recordSearch').addEventListener('input', renderRecords);
-  document.getElementById('recordFilter').addEventListener('change', renderRecords);
+  document.getElementById('recordFilter').addEventListener('change', () => { state.recordDrilldown = null; renderRecords(); });
   const monthFilter = document.getElementById('monthFilter');
   if (monthFilter) {
     // iOS 原生月份选择器的“还原”会恢复 defaultValue，这里固定为当前月份。
@@ -438,6 +440,7 @@ function renderRecords() {
   }
   monthFilter.addEventListener('change', event => {
     state.selectedMonth = event.target.value || currentMonthKey();
+    state.recordDrilldown = null;
     state.monthSelectionMode = state.selectedMonth === currentMonthKey() ? 'auto' : 'manual';
     if (state.monthSelectionMode === 'auto') state.chartYear = new Date().getFullYear();
     saveState();
@@ -450,6 +453,15 @@ function budgetCategories() {
     ...Object.keys(state.budgets || {}),
     ...(state.categories?.expense || expenseCategories)
   ])].filter(Boolean);
+}
+function openBudgetRecords(category) {
+  const month = state.selectedMonth || currentMonthKey();
+  state.recordDrilldown = { category, month };
+  state.activeView = 'records';
+  saveState();
+  renderAll();
+  document.getElementById('sidebar')?.classList.remove('open');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function renderBudget() {
   const stats = Object.fromEntries(categoryStats());
@@ -661,7 +673,7 @@ function closeCategoryEditor(returnToBudget = true) {
 function deleteRecord(id) { const record = state.records.find(r => r.id === id); if (!record) return; if (!confirm(`确定删除“${record.note || record.category}”这笔账吗？`)) return; state.records = state.records.filter(r => r.id !== id); const account = state.accounts.find(a => a.name === record.account); if (account) account.balance += record.type === 'income' ? -Number(record.amount) : Number(record.amount); saveState(); renderAll(); showToast('账目已删除'); }
 function exportData() { const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `西瓜账本备份-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(link.href); showToast('数据已导出'); }
 function importData(file) { const reader = new FileReader(); reader.onload = () => { try { const imported = JSON.parse(reader.result); if (!Array.isArray(imported.records) || !Array.isArray(imported.accounts)) throw new Error(); state = { ...defaultState, ...imported }; saveState(); renderAll(); showToast('数据已恢复'); } catch { showToast('文件格式不正确'); } }; reader.readAsText(file); }
-function handleAction(element) { const action = element.dataset.action; if (action === 'open-cloud-auth') { if (cloudSession) { openCloudAuth(); } else { openCloudAuth(); } return; } if (action === 'cloud-sign-in') { signInCloud(); return; } if (action === 'cloud-sign-up') { signUpCloud(); return; } if (action === 'cloud-show-forgot') { showCloudForgot(); return; } if (action === 'cloud-show-login') { showCloudLogin(); return; } if (action === 'cloud-send-reset') { sendPasswordReset(); return; } if (action === 'cloud-verify-reset') { verifyRecoveryCode(); return; } if (action === 'cloud-update-password') { updateCloudPassword(); return; } if (action === 'cloud-sign-out') { signOutCloud(); return; } if (action === 'cloud-sync-now') { syncCloudState(); return; } if (action === 'scroll-to-trend') { document.getElementById('trendPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; } if (action === 'switch-view') { state.activeView = element.dataset.view; saveState(); renderAll(); document.getElementById('sidebar').classList.remove('open'); window.scrollTo({ top: 0, behavior: 'smooth' }); } else if (action === 'open-add') openAdd(); else if (action === 'close-modal') closeModals(); else if (action === 'delete-record') deleteRecord(element.dataset.id); else if (action === 'edit-record') openEditRecord(element.dataset.id); else if (action === 'open-account') { document.getElementById('accountForm').reset(); document.getElementById('accountModal').hidden = false; } else if (action === 'export-data') exportData(); else if (action === 'import-data') document.getElementById('importInput').click(); else if (action === 'clear-data') { if (confirm('确定清空所有数据吗？此操作无法撤销。')) { localStorage.removeItem(storageKey); state = structuredClone(defaultState); renderAll(); showToast('已恢复为示例账本'); } } else if (action === 'toggle-reminder') element.classList.toggle('on'); else if (action === 'focus-note') { document.getElementById('transactionNoteField').classList.add('visible'); document.getElementById('noteButtonText').textContent = '已备注'; document.querySelector('#transactionForm [name="note"]').focus(); } else if (action === 'open-category-editor') openCategoryEditor(); else if (action === 'toggle-record-search') { const box = document.querySelector('.record-toolbar-search'); box?.classList.toggle('expanded'); if (box?.classList.contains('expanded')) document.getElementById('recordSearch')?.focus(); } else if (action === 'open-budget-category-editor') openBudgetCategoryEditor(); else if (action === 'close-category-editor') closeCategoryEditor(); else if (action === 'open-budget-editor') openBudgetEditor(); else if (action === 'edit-budget') openBudgetEditor(element.dataset.category); else if (action === 'delete-budget') deleteBudget(element.dataset.category); else if (action === 'save-category') saveCategory(element.dataset.category); else if (action === 'delete-category') deleteCategory(element.dataset.category); else if (action === 'toggle-icon-picker') {
+function handleAction(element) { const action = element.dataset.action; if (action === 'open-cloud-auth') { if (cloudSession) { openCloudAuth(); } else { openCloudAuth(); } return; } if (action === 'cloud-sign-in') { signInCloud(); return; } if (action === 'cloud-sign-up') { signUpCloud(); return; } if (action === 'cloud-show-forgot') { showCloudForgot(); return; } if (action === 'cloud-show-login') { showCloudLogin(); return; } if (action === 'cloud-send-reset') { sendPasswordReset(); return; } if (action === 'cloud-verify-reset') { verifyRecoveryCode(); return; } if (action === 'cloud-update-password') { updateCloudPassword(); return; } if (action === 'cloud-sign-out') { signOutCloud(); return; } if (action === 'cloud-sync-now') { syncCloudState(); return; } if (action === 'scroll-to-trend') { document.getElementById('trendPanel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; } if (action === 'switch-view') { state.activeView = element.dataset.view; saveState(); renderAll(); document.getElementById('sidebar').classList.remove('open'); window.scrollTo({ top: 0, behavior: 'smooth' }); } else if (action === 'open-add') openAdd(); else if (action === 'close-modal') closeModals(); else if (action === 'delete-record') deleteRecord(element.dataset.id); else if (action === 'edit-record') openEditRecord(element.dataset.id); else if (action === 'open-account') { document.getElementById('accountForm').reset(); document.getElementById('accountModal').hidden = false; } else if (action === 'export-data') exportData(); else if (action === 'import-data') document.getElementById('importInput').click(); else if (action === 'clear-data') { if (confirm('确定清空所有数据吗？此操作无法撤销。')) { localStorage.removeItem(storageKey); state = structuredClone(defaultState); renderAll(); showToast('已恢复为示例账本'); } } else if (action === 'toggle-reminder') element.classList.toggle('on'); else if (action === 'focus-note') { document.getElementById('transactionNoteField').classList.add('visible'); document.getElementById('noteButtonText').textContent = '已备注'; document.querySelector('#transactionForm [name="note"]').focus(); } else if (action === 'open-category-editor') openCategoryEditor(); else if (action === 'clear-record-drilldown') { state.recordDrilldown = null; renderRecords(); } else if (action === 'toggle-record-search') { const box = document.querySelector('.record-toolbar-search'); box?.classList.toggle('expanded'); if (box?.classList.contains('expanded')) document.getElementById('recordSearch')?.focus(); } else if (action === 'open-budget-category-editor') openBudgetCategoryEditor(); else if (action === 'close-category-editor') closeCategoryEditor(); else if (action === 'open-budget-editor') openBudgetEditor(); else if (action === 'edit-budget') openBudgetEditor(element.dataset.category); else if (action === 'delete-budget') deleteBudget(element.dataset.category); else if (action === 'save-category') saveCategory(element.dataset.category); else if (action === 'delete-category') deleteCategory(element.dataset.category); else if (action === 'toggle-icon-picker') {
   const row = element.closest('.category-editor-row');
   document.querySelectorAll('.category-editor-row .icon-picker.open').forEach(picker => { if (picker !== row?.querySelector('.icon-picker')) picker.classList.remove('open'); });
   row?.querySelector('.icon-picker')?.classList.toggle('open');
@@ -734,6 +746,8 @@ function handlePadKey(key) {
 
 let budgetTouchState = null;
 let lastBudgetTap = null;
+let budgetTapTimer = null;
+let suppressNextBudgetClick = false;
 
 document.addEventListener('touchstart', event => {
   const card = event.target.closest('.budget-card[data-budget-category]');
@@ -749,7 +763,8 @@ document.addEventListener('touchmove', event => {
   if (!touch) return;
   const deltaX = touch.clientX - budgetTouchState.startX;
   const deltaY = touch.clientY - budgetTouchState.startY;
-  if (Math.abs(deltaX) < 8 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+  if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return;
+  if (Math.abs(deltaX) <= Math.abs(deltaY)) { budgetTouchState.moved = true; return; }
   budgetTouchState.moved = true;
   if (deltaX < 0) {
     document.querySelectorAll('.budget-card.swiped').forEach(card => { if (card !== budgetTouchState.card) card.classList.remove('swiped'); });
@@ -764,6 +779,8 @@ document.addEventListener('touchend', event => {
   if (!budgetTouchState) return;
   const { card, moved } = budgetTouchState;
   budgetTouchState = null;
+  suppressNextBudgetClick = true;
+  setTimeout(() => { suppressNextBudgetClick = false; }, 500);
   if (moved || event.target.closest('button')) return;
   if (card.classList.contains('swiped')) {
     card.classList.remove('swiped');
@@ -772,16 +789,23 @@ document.addEventListener('touchend', event => {
   }
   const now = Date.now();
   if (lastBudgetTap && lastBudgetTap.card === card && now - lastBudgetTap.time < 380) {
+    clearTimeout(budgetTapTimer);
     lastBudgetTap = null;
     openBudgetEditor(card.dataset.budgetCategory);
   } else {
     lastBudgetTap = { card, time: now };
+    clearTimeout(budgetTapTimer);
+    budgetTapTimer = setTimeout(() => {
+      if (lastBudgetTap?.card === card) { openBudgetRecords(card.dataset.budgetCategory); lastBudgetTap = null; }
+    }, 400);
   }
 }, { passive: true });
 
 document.addEventListener('dblclick', event => {
   const card = event.target.closest('.budget-card[data-budget-category]');
   if (!card || event.target.closest('button')) return;
+  clearTimeout(budgetTapTimer);
+  lastBudgetTap = null;
   openBudgetEditor(card.dataset.budgetCategory);
 });
 
@@ -806,6 +830,12 @@ document.addEventListener('touchstart', event => {
 }, { passive: true });
 
 document.addEventListener('click', event => {
+  const budgetCard = event.target.closest('.budget-card[data-budget-category]');
+  if (budgetCard && !event.target.closest('button') && event.detail === 1) {
+    if (suppressNextBudgetClick) { suppressNextBudgetClick = false; return; }
+    clearTimeout(budgetTapTimer);
+    budgetTapTimer = setTimeout(() => openBudgetRecords(budgetCard.dataset.budgetCategory), 400);
+  }
   const action = event.target.closest('[data-action]');
   if (action) handleAction(action);
   const budgetIconChoice = event.target.closest('[data-budget-icon]');

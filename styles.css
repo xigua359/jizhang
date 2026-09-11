@@ -760,3 +760,7 @@ button { cursor: pointer; border: 0; }
     font-size: 10px;
   }
 }
+
+.record-drilldown-note { display:flex; align-items:center; gap:8px; margin: -8px 0 14px; padding: 10px 12px; border-radius: 10px; color: var(--blue); background: #f1f5ff; font-size: 13px; }
+.record-drilldown-note .text-button { margin-left:auto; color: var(--blue); }
+@media (max-width: 520px) { .record-drilldown-note { font-size: 12px; } }
